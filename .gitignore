@@ -1,0 +1,66 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+examples/*/node_modules
+examples/*/dist
+examples/*/.tanstack
+examples/*/.vinxi
+
+# Layer 2 conformance test output
+conformance/test-results/
+conformance/playwright-report/
+conformance/blob-report/
+conformance/.cache/
+
+# Layer 2 harness dependencies (each harness has its own node_modules)
+conformance/*/node_modules
+conformance/*/dist
+# Astro harness emits generated types + caches into .astro/
+conformance/*/.astro
+# Livewire (Laravel) harness runtime directories — only materialized
+# inside the Docker image via `composer install` / runtime.
+conformance/livewire/vendor
+conformance/livewire/storage/framework/cache/data
+conformance/livewire/storage/framework/sessions
+conformance/livewire/storage/framework/views
+conformance/livewire/storage/logs
+conformance/livewire/bootstrap/cache
+# LiveView (Phoenix) harness build artifacts — only materialized
+# inside the Docker image via `mix deps.get` / `mix compile`.
+conformance/liveview/_build
+conformance/liveview/deps
+conformance/liveview/priv/static/phoenix.js
+conformance/liveview/priv/static/phoenix_live_view.js
+conformance/liveview/priv/static/collector.js
+conformance/liveview/priv/static/faultsense-agent.min.js
+conformance/liveview/.elixir_ls
+
+# Benchmark tool local results — url-mode writes here. Demo and stress
+# modes write to ../../docs/public/performance/ at the monorepo root,
+# which is committed.
+tools/benchmark/results/
+tools/benchmark/test-results/
+tools/benchmark/stress/node_modules/
+tools/benchmark/stress/dist/

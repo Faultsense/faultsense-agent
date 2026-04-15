@@ -1,0 +1,60 @@
+{
+  "name": "faultsense",
+  "version": "0.4.1",
+  "description": "A Framework & Language Agnostic Application Feature Monitor for the Frontend",
+  "main": "dist/faultsense-agent.min.js",
+  "files": [
+    "dist/faultsense-agent.min.js",
+    "dist/faultsense-console.min.js",
+    "dist/faultsense-panel.min.js",
+    "README.md",
+    "LICENSE",
+    "assets/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Faultsense/faultsense-agent.git"
+  },
+  "keywords": [
+    "testing",
+    "assertions",
+    "observability",
+    "monitoring"
+  ],
+  "author": "Fault Sense",
+  "license": "FSL-1.1-ALv2",
+  "homepage": "https://github.com/Faultsense/faultsense-agent",
+  "bugs": {
+    "url": "https://github.com/Faultsense/faultsense-agent/issues"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs all",
+    "build:agent": "node scripts/build.mjs agent",
+    "build:console": "node scripts/build.mjs console",
+    "build:panel": "node scripts/build.mjs panel",
+    "build:collectors": "node scripts/build.mjs console && node scripts/build.mjs panel",
+    "size": "echo \"📦 faultsense-agent.min.js\" && ls -lh dist/faultsense-agent.min.js | awk '{print \"   Raw: \" $5 \"B\"}' && echo \"   Gzipped: $(echo \"scale=1; $(gzip -c dist/faultsense-agent.min.js | wc -c | tr -d ' ') / 1024\" | bc)kb\"",
+    "build:size": "npm run build:agent && npm run size",
+    "prepublishOnly": "npm run build",
+    "test": "vitest",
+    "conformance": "playwright test --config=conformance/playwright.config.ts",
+    "conformance:install": "playwright install --with-deps chromium",
+    "conformance:install:harnesses": "for d in conformance/react conformance/vue3 conformance/svelte conformance/solid conformance/htmx conformance/alpine conformance/astro; do echo \"==> npm ci in $d\" && (cd \"$d\" && npm ci) || exit 1; done",
+    "conformance:matrix": "npm run conformance && node conformance/scripts/generate-matrix.js",
+    "benchmark": "FS_BENCH_MODE=url playwright test --config=tools/benchmark/playwright.config.ts",
+    "benchmark:demo": "FS_BENCH_MODE=demo playwright test --config=tools/benchmark/playwright.config.ts",
+    "benchmark:stress": "FS_BENCH_MODE=stress playwright test --config=tools/benchmark/playwright.config.ts --project=stress",
+    "benchmark:ava": "FS_BENCH_MODE=ava playwright test --config=tools/benchmark/playwright.config.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^22.12.0",
+    "devtools-protocol": "^0.0.1612613",
+    "esbuild": "^0.25.11",
+    "jsdom": "^25.0.0",
+    "msw": "^2.4.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
+    "web-vitals": "^4.2.4"
+  }
+}

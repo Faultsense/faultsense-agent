@@ -1,0 +1,131 @@
+# Faultsense Agent
+
+Lightweight, zero-dependency browser agent that monitors feature health through real-time assertions declared via `fs-*` HTML attributes.
+
+## Core Value Props
+
+- **Semantic correctness:** Asserting that the *right* thing happened, not just that *something* happened.
+- **Business logic verification:** Validating that features produce correct outcomes for real users in the field.
+- **Negative assertions:** Detecting when something that should NOT have happened did (e.g., unexpected error states).
+- **Feature health across releases:** Tracking whether specific features work or break as code ships.
+
+These are the differentiators. No other production monitoring tool declaratively asserts correctness against real user sessions. Dead-click/rage-click detection, frustration heuristics, and ARIA contract monitoring are out of scope — they detect symptoms, not semantic failures, and other tools already cover them. Do not dilute the core value prop by chasing heuristic signals.
+
+Explicit manual instrumentation is the moat, not a limitation. The value is directly proportional to the instrumentation effort — developers must think about what "correct" means and encode it. That's why no one else does this. The pitch: "you already think about correctness in your E2E tests — move those declarations into your HTML and get 100x the coverage against real users."
+
+## How Faultsense Differentiates
+
+- **vs. Session Replay (FullStory, LogRocket, Hotjar, PostHog):** These detect frustration symptoms after the fact — rage clicks, dead clicks, error clicks. They tell you "something is probably broken." Faultsense tells you "this specific thing is definitely broken, and here's what should have happened."
+- **vs. Synthetic Monitoring (Datadog Synthetics, New Relic):** These run scripted tests in fake environments on a schedule. Faultsense runs assertions against real user sessions in production — real networks, real data, real device conditions.
+- **vs. RUM (Datadog RUM, Sentry, New Relic Browser):** These measure performance (Core Web Vitals, load times, error rates). They answer "is the app fast?" not "is the app correct?" Faultsense answers correctness.
+- **vs. E2E Tests (Playwright, Cypress):** These verify correctness but only in CI against test data. Faultsense verifies the same things but in the field, against every real user session, across every release.
+- **vs. Error Tracking (Sentry, Bugsnag):** These catch thrown exceptions. Faultsense catches silent failures — features that don't error but simply don't produce the correct outcome.
+
+## Instrumentation Guide
+
+The full API reference is in [`skills/faultsense-instrumentation/SKILL.md`](skills/faultsense-instrumentation/SKILL.md). The quick reference table below covers the most common attributes.
+
+### Quick Reference
+
+| Attribute | Purpose | Example |
+|---|---|---|
+| `fs-assert` | Assertion key (required) | `"checkout/submit-order"` |
+| `fs-trigger` | Event trigger (required) | `"click"`, `"submit"`, `"mount"`, `"invariant"` |
+| `fs-assert-added` | Element appears in DOM | `".success-msg"` |
+| `fs-assert-removed` | Element removed from DOM | `".modal-content"` |
+| `fs-assert-updated` | Element/subtree mutated | `"#cart-count"` |
+| `fs-assert-visible` | Element exists and visible | `".dashboard"` |
+| `fs-assert-hidden` | Element exists but hidden | `".loading-spinner"` |
+| `fs-assert-loaded` | Media finished loading | `"#hero-image"` |
+| `fs-assert-stable` | Element NOT mutated | `"#panel"` |
+| `fs-assert-emitted` | CustomEvent fires on document | `"payment:complete"` |
+| `fs-assert-after` | Sequence check: parent passed | `"checkout/add-to-cart"` |
+| `fs-assert-{type}-{condition}` | Conditional assertion | `fs-assert-added-success=".dashboard"` |
+| `fs-assert-mutex` | Conditional mutex mode | `"type"`, `"each"`, `"conditions"` |
+| `fs-assert-oob` | OOB: trigger on parent pass | `fs-assert-oob="todos/toggle"` |
+| `fs-assert-oob-fail` | OOB: trigger on parent fail | `fs-assert-oob-fail="todos/toggle"` |
+| `fs-assert-timeout` | Custom timeout (ms) | `"2000"` |
+| `fs-assert-mpa` | Persist across page nav | `"true"` |
+
+## Project Context
+
+- The agent is open source and collector-agnostic. A hosted backend is a separate project.
+- Market positioning (QA/testing tool) does not impact the agent's implementation or architecture.
+- MPA (multi-page app) support is first-class — SPAs and MPAs should be equally supported.
+- Conditional assertions use UI outcomes as the signal, not network responses. No server-side integration required.
+
+## Notes
+
+- **Queue/Storage refactor:** MPA-marked assertions currently bypass the in-memory queue and go directly to localStorage (`manager.ts:74`). Storage may be better modeled as an implementation detail of the queue. Flagged for future revisit.
+- **Cross-type conditional mutex:** Conditional sibling groups default to `assertionKey + type`. Use `fs-assert-mutex` to link conditionals across types — e.g., `fs-assert-mutex="each"` makes `fs-assert-removed-success` + `fs-assert-added-error` mutually exclusive. See `"each"`, `"conditions"`, and selective modes.
+
+## Timeout Model
+
+Assertions resolve naturally when the DOM changes. No default per-assertion timer.
+
+- **GC sweep** (`config.gcInterval`, default 5s) — a background timer cleans up stale assertions that never resolved. _(Was 30s before PR #20 cut it to 5s alongside the wait-for-pass resolver refactor.)_
+- **SLA timeout** (`fs-assert-timeout="2000"`) — opt-in per-assertion timer for performance contracts.
+- **Page unload** — assertions older than `config.unloadGracePeriod` (default 2s) are failed on page close. Fresh assertions are silently dropped (user navigated, not a failure). Uses `sendBeacon` for reliable delivery.
+- **Re-trigger tracking** — when a trigger fires on a pending assertion, the timestamp is recorded in an `attempts[]` array on the assertion. Included in the collector payload for rage-click analysis.
+
+## Conformance strategy
+
+Stack coverage is enforced through two layers. Layer 1 is an exhaustive jsdom suite that locks in how the agent resolves raw DOM mutation patterns; Layer 2 runs real browsers against framework harnesses and feeds newly-discovered patterns back into Layer 1. The live works-with matrix is at [`../../docs/public/agent/works-with.md`](../../docs/public/agent/works-with.md); framework-specific integration findings are at [`../../docs/internal/architecture/framework-integration-notes.md`](../../docs/internal/architecture/framework-integration-notes.md).
+
+- **Layer 1 — DOM mutation pattern suite.** `tests/conformance/pat-NN-*.test.ts` files, one per named pattern class. Each file uses the shared helper at [`tests/helpers/assertions.ts`](tests/helpers/assertions.ts) and locks in the agent's behavior for that class of mutation shape (outerHTML swap, morphdom patch, microtask batching, etc.). The catalog lives at [`../../docs/public/agent/mutation-patterns.md`](../../docs/public/agent/mutation-patterns.md). Run via `npm test`.
+- **Layer 2 — Per-framework harnesses.** Purpose-built minimal apps under `conformance/<framework>/` exercising the same focused scenario set across 10 framework targets: React 19, Vue 3, Svelte 5, Solid, Alpine.js, Astro (SSR + React island), HTMX, Hotwire (Rails + Turbo), Livewire (Laravel), and Phoenix LiveView. Every driver is a thin wrapper over the shared runners in `conformance/shared/runners.ts` and registers scenario keys from the canonical registry at `conformance/shared/scenarios.js`. Run via `npm run conformance`. The works-with matrix regenerates via `npm run conformance:matrix`.
+- **`examples/` vs `conformance/` boundary.** `examples/todolist-tanstack/` and `examples/todolist-htmx/` are polished, human-facing marketing demos with full feature surface (auth, routing, offline, activity log, panel collector overlay). `conformance/` harnesses are minimal, stable, and test-driven. Never couple the demos to the conformance suite — polish them freely.
+- **Discovery → lock-in loop.** When a Layer 2 harness exposes an agent bug, the workflow is: (1) diagnose the root cause, (2) name the mutation pattern class, (3) add a new `PAT-NN` entry to the catalog plus a failing regression test under `tests/conformance/`, (4) fix the agent, (5) verify both layers green. The catalog is append-only — existing IDs are stable references. The canonical example is the quoted-attribute-value bug from Phase 4: Vue 3 template literals emit `[data-id='1']`, the agent's parser preserved the quotes, the match silently failed. Fix: `stripOuterQuotes` in `parseTypeValue` + three unit tests in `tests/assertions/attrs.test.ts`. The Vue 3 harness now keeps the quoted form as a load-bearing regression (see `feat/cross-stack-conformance-layer-1` commit `e3550f9`).
+- **When you add a new framework harness:**
+  1. Scaffold under `conformance/<framework>/` using that framework's natural backend (Rails for Hotwire, Laravel for Livewire, Phoenix for LiveView, Node for anything language-agnostic). Keep the page minimal and mirror the scenario naming used by the other harnesses so the works-with matrix rows line up. Polyglot stacks (Ruby/PHP/Elixir) run in Docker via `docker-compose.yml` — see `conformance/hotwire/`, `conformance/livewire/`, and `conformance/liveview/` for the pattern.
+  2. Add a Playwright project + `webServer` entry in `conformance/playwright.config.ts` on a dedicated port. Ports `3100`–`4000` are taken by react/vue3/hotwire/htmx/svelte/solid/alpine/astro/livewire/liveview respectively; pick the next free slot.
+  3. Write `conformance/drivers/<framework>.spec.ts` by importing `runners` + `standardBeforeEach` from `conformance/shared/runners.ts` and declaring a `HarnessConfig` (toggle selector/action, expected assertion types, `settleMs`, `resetBackend` hook). Don't hand-write the test bodies — delegate to `runners[scenarioKey](page, config)`. Framework-specific variance lives in the config.
+  4. Register any new scenario keys in `conformance/shared/scenarios.js` (the canonical registry shared with the matrix generator). The matrix generator fails loudly if a driver runs a scenario key that isn't in the registry.
+  5. Run `npm run conformance:matrix` — the generator updates `docs/public/agent/works-with.md` automatically from the new results.
+  6. If the harness exposes a new mutation pattern not in the catalog, **extract the pattern first**: add a `PAT-NN` test under `tests/conformance/` and a catalog entry in `docs/public/agent/mutation-patterns.md`, then add the PAT to the scenario's `pats:` list in `conformance/shared/scenarios.js`. Do not inline agent fixes into the harness PR — the discovery → lock-in loop exists to keep the layer separation clean.
+  7. If the harness reveals a framework-specific integration gotcha (not an agent bug), capture it in `docs/internal/architecture/framework-integration-notes.md` under a new section. Entries use the Finding / Why / Fix / Source structure so they can be promoted to standalone integration guides later.
+
+## Error Context
+
+JS errors do not instantly fail assertions. When an uncaught exception occurs, all pending assertions are tagged with `errorContext` (first error wins — subsequent errors do not overwrite). The assertion continues resolving normally via DOM observation, timeout, or GC.
+
+- **Passes with errorContext:** the feature worked but a JS error occurred in the session — tells the collector "passed but investigate."
+- **Fails with errorContext:** the feature broke and here's the likely cause.
+- The collector derives human-readable failure messages from assertion metadata (type, selector, modifiers, timeout). No failure reason strings are generated by the agent.
+
+## Configuration
+
+| Option | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `releaseLabel` | string | Yes | — | App version or commit hash |
+| `collectorURL` | string or function | Yes | — | Backend endpoint URL or custom collector function |
+| `apiKey` | string | If URL | — | API key (required when collectorURL is a URL) |
+| `timeout` | number | No | 1000 | Default assertion timeout in ms |
+| `debug` | boolean | No | false | Enable console logging |
+| `userContext` | `Record<string, any>` | No | — | Arbitrary context attached to all assertion payloads (e.g., userId, plan tier) |
+
+## API Methods
+
+- **`Faultsense.init(config)`** — initialize the agent with configuration options.
+- **`Faultsense.cleanup()`** — tear down the agent, remove all listeners and observers.
+- **`Faultsense.registerCleanupHook(fn)`** — register a function to run during cleanup.
+- **`Faultsense.setUserContext(context)`** — replace the current user context. Does not merge — pass the complete context each time. Subsequent assertion payloads include the updated context.
+
+```javascript
+// At init
+Faultsense.init({
+  releaseLabel: '1.0.0',
+  collectorURL: '...',
+  userContext: { plan: 'pro' }
+});
+
+// After login
+Faultsense.setUserContext({ userId: 'u_123', plan: 'pro' });
+```
+
+## Development
+
+- `npm test` — run vitest (jsdom environment)
+- `npm run build` — esbuild → `dist/faultsense-agent.min.js` (IIFE, minified)
+- `npm run benchmark -- <URL>` — run performance benchmark against any public URL
+- `npm run benchmark:demo` — run benchmark against `examples/todolist-htmx`, writes to `docs/public/performance/current.md` at the monorepo root
