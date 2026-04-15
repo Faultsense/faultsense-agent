@@ -204,10 +204,6 @@ interface EventPayload {
 }
 ```
 
-## Full API Reference
-
-For the complete API reference including all assertion types, modifiers, OOB patterns, invariants, custom events, sequence assertions, and common patterns, see the [instrumentation guide](skills/faultsense-instrumentation/SKILL.md).
-
 ## Framework Usage
 
 The `fs-*` attributes work in any framework that renders to the DOM.
@@ -243,7 +239,7 @@ The `fs-*` attributes work in any framework that renders to the DOM.
 
 ## Works With
 
-Faultsense is framework-agnostic — it observes the DOM, not framework internals — so anything that ships HTML works. The table below is verified end-to-end against real framework dev servers via Playwright on every PR. Full results, per-scenario grid, and mutation-pattern coverage are published on the [Faultsense docs site](https://www.faultsense.org/docs).
+Faultsense is framework-agnostic — it observes the DOM, not framework internals — so anything that ships HTML works. The table below is verified end-to-end against real framework dev servers via Playwright on every release.
 
 | Framework | Runtime | Coverage |
 |---|---|---|
@@ -258,22 +254,23 @@ Faultsense is framework-agnostic — it observes the DOM, not framework internal
 | Livewire 3 (Laravel 11) | `conformance/livewire/` (Docker) | 8/8 scenarios (PAT-04 empirical) |
 | Phoenix LiveView 1.0 | `conformance/liveview/` (Docker) | 8/8 scenarios (PAT-04 empirical) |
 
-Adding a new framework means scaffolding a minimal harness and a driver file — see [`conformance/README.md`](conformance/README.md). The Layer 1 mutation-pattern suite at [`tests/conformance/`](tests/conformance/) locks in every DOM mutation shape the agent handles, so frameworks that produce those shapes are supported by transitivity — the Layer 2 drivers are empirical confirmation, not the source of truth.
+The Layer 1 mutation-pattern suite at [`tests/conformance/`](tests/conformance/) locks in every DOM mutation shape the agent handles, so frameworks that produce those shapes are supported by transitivity — the per-framework Layer 2 drivers under [`conformance/`](conformance/) are empirical confirmation, not the source of truth.
+
+Running the full Layer 2 suite locally needs **Docker** for the Hotwire, Livewire, and LiveView harnesses (each boots its own Rails / Laravel / Phoenix runtime in a container). The other seven harnesses run directly in Node. See [`conformance/README.md`](conformance/README.md) for setup details and how to skip the Docker harnesses.
 
 ## Performance
 
 **Designed to stay off the critical path.**
 
-Benchmarked across 50-1000 assertions in a React 19 stress harness with background DOM churn and CPU throttling. All results use paired statistical comparisons — full methodology and current numbers on the [Faultsense docs site](https://www.faultsense.org/docs).
+Benchmarked across 50-1000 assertions in a React 19 stress harness with background DOM churn and CPU throttling. All results use paired statistical comparisons.
 
 - **0ms INP** across all configurations, including 1000 assertions under 4x CPU throttle
 - **Zero new long tasks** — the main thread stays clean
 - **Sub-linear heap scaling** — 140KB at 1000 assertions (less than a medium JPEG)
 
-Run the benchmarks yourself:
+Run the stress benchmark yourself:
 
 ```bash
-npm run benchmark -- https://your-site.com
 npm run benchmark:stress
 ```
 
@@ -295,7 +292,5 @@ The `examples/` directory contains reference ports you can run locally. The same
 - **[todolist-htmx](examples/todolist-htmx/)** — HTMX 2 + Express + EJS (server-rendered fragments, hx-boost SPA nav, server-side interpolation for dynamic assertion values).
 
 ## Links
-- [Documentation](https://www.faultsense.org/docs)
-- [Interactive Examples](https://www.faultsense.org/examples)
 - [Issues](https://github.com/Faultsense/faultsense-agent/issues)
 - [Discussions](https://github.com/Faultsense/faultsense-agent/discussions)

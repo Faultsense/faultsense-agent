@@ -1,6 +1,6 @@
 {
   "name": "faultsense",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "A Framework & Language Agnostic Application Feature Monitor for the Frontend",
   "main": "dist/faultsense-agent.min.js",
   "files": [
@@ -41,7 +41,7 @@
     "conformance:install": "playwright install --with-deps chromium",
     "conformance:install:harnesses": "for d in conformance/react conformance/vue3 conformance/svelte conformance/solid conformance/htmx conformance/alpine conformance/astro; do echo \"==> npm ci in $d\" && (cd \"$d\" && npm ci) || exit 1; done",
     "conformance:reset": "for d in conformance/hotwire conformance/livewire conformance/liveview; do echo \"==> docker compose down in $d\" && docker compose -f \"$d/docker-compose.yml\" down || exit 1; done",
-    "conformance:matrix": "npm run conformance && node conformance/scripts/generate-matrix.js",
+    "conformance:matrix": "node conformance/scripts/generate-matrix.js",
     "benchmark": "FS_BENCH_MODE=url playwright test --config=tools/benchmark/playwright.config.ts",
     "benchmark:demo": "FS_BENCH_MODE=demo playwright test --config=tools/benchmark/playwright.config.ts",
     "benchmark:stress": "FS_BENCH_MODE=stress playwright test --config=tools/benchmark/playwright.config.ts --project=stress",
