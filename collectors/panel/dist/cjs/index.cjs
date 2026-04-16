@@ -1,4 +1,4 @@
-/*! Faultsense panel collector (cjs/index) v0.5.3 | FSL-1.1-ALv2 | https://faultsense.com */
+/*! Faultsense panel collector (cjs/index) v0.5.4 | FSL-1.1-ALv2 | https://faultsense.com */
 "use strict";
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;

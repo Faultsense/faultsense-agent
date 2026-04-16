@@ -1,6 +1,6 @@
 {
   "name": "@faultsense/agent",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "A Framework & Language Agnostic Application Feature Monitor for the Frontend",
   "type": "module",
   "main": "./dist/cjs/index.cjs",

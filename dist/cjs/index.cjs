@@ -1,4 +1,4 @@
-/*! Faultsense agent (cjs/index) v0.5.3 | FSL-1.1-ALv2 | https://faultsense.com */
+/*! Faultsense agent (cjs/index) v0.5.4 | FSL-1.1-ALv2 | https://faultsense.com */
 "use strict";
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -1734,7 +1734,7 @@ var cleanupHooks = [];
 function registerCleanupHook(fn) {
   cleanupHooks.push(fn);
 }
-var version = "0.5.3";
+var version = "0.5.4";
 function init(initialConfig) {
   let observer = null;
   const config = setConfiguration(initialConfig);

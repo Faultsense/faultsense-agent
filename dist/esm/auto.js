@@ -1,4 +1,4 @@
-/*! Faultsense agent (esm/auto) v0.5.3 | FSL-1.1-ALv2 | https://faultsense.com */
+/*! Faultsense agent (esm/auto) v0.5.4 | FSL-1.1-ALv2 | https://faultsense.com */
 
 // src/types.ts
 var domAssertionTypes = ["added", "removed", "updated", "visible", "hidden", "loaded", "stable"];
@@ -1707,7 +1707,7 @@ var cleanupHooks = [];
 function registerCleanupHook(fn) {
   cleanupHooks.push(fn);
 }
-var version = "0.5.3";
+var version = "0.5.4";
 function init(initialConfig) {
   let observer = null;
   const config = setConfiguration(initialConfig);
