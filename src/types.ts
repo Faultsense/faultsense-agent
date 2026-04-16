@@ -72,6 +72,7 @@ export type DomModifier = (typeof domModifiers)[number];
 export type AssertionModifiers =
   | "mpa"
   | "timeout"
+  | "detail-matches"
   | DomModifier;
 
 export interface Assertion {

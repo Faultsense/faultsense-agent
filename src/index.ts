@@ -1,19 +1,47 @@
+// Pure entry point for @faultsense/agent.
+//
+// This file contains the init() function and everything bundler users
+// (Vite / webpack / esbuild / Rollup) import through the npm package's
+// default entry. It deliberately has NO top-level statements that touch
+// window, document, DOMContentLoaded, or anything else that requires a
+// DOM — importing this module in a Node-only context (SSR, tests) must
+// not throw.
+//
+// The side-effecting self-install logic (read <script id="fs-agent">,
+// attach to window.Faultsense, wire DOMContentLoaded, auto-init) lives
+// in src/auto.ts. The IIFE CDN bundle's entry point is auto.ts; the
+// ESM and CJS bundler entries point here.
+
 import { assertionTriggerAttr, supportedEvents } from "./config";
 import { createConnectivityHandlers } from "./processors/connectivity";
 import { createAssertionManager } from "./assertions/manager";
 import { interceptErrors } from "./interceptors/error";
 import { interceptNavigation } from "./interceptors/navigation";
 import { setResolverDebugLogger } from "./resolvers/dom";
-import { Configuration, CollectorFunction } from "./types";
+import { Configuration } from "./types";
 import {
   isValidConfiguration,
   setConfiguration,
 } from "./assertions/configuration";
 import { createLogger } from "./utils/logger";
-import { isURL } from "./utils/object";
 
-// Cleanup hooks registered by external collectors (e.g., panel collector)
+// Public type re-exports for collector packages and advanced consumers.
+// `ApiPayload` is the assertion-result shape that collectors receive —
+// the @faultsense/panel-collector and @faultsense/console-collector
+// packages import it via `import type { ApiPayload } from "@faultsense/agent"`.
+// Keeping the re-export here is what makes that import path valid.
+export type { ApiPayload, Configuration, CollectorFunction } from "./types";
+
+// Cleanup hooks registered by external collectors (e.g., panel collector).
+// Shared module state: collectors call registerCleanupHook() before init(),
+// init()'s returned cleanup function drains the array.
 const cleanupHooks: (() => void)[] = [];
+
+export function registerCleanupHook(fn: () => void): void {
+  cleanupHooks.push(fn);
+}
+
+export const version: string = __FS_VERSION__;
 
 export function init(initialConfig: Partial<Configuration>): () => void {
   let observer: MutationObserver | null = null;
@@ -103,10 +131,13 @@ export function init(initialConfig: Partial<Configuration>): () => void {
     assertionManager.registerCustomEventElement(el);
   }
 
-  // Expose setUserContext on the global API
-  if (window.Faultsense) {
-    window.Faultsense.setUserContext = assertionManager.setUserContext;
-  }
+  // Ensure window.Faultsense exists and expose setUserContext on it.
+  // init() is a function call — it's allowed to touch globals, even
+  // though the module import is pure. Bundler users who call init()
+  // get window.Faultsense.setUserContext as a usable API after this
+  // point, matching the auto-install script-tag flow.
+  window.Faultsense = window.Faultsense || {};
+  window.Faultsense.setUserContext = assertionManager.setUserContext;
 
   // Run initial check
   assertionManager.checkAssertions();
@@ -144,68 +175,3 @@ export function init(initialConfig: Partial<Configuration>): () => void {
     cleanupHooks.length = 0;
   };
 }
-
-(function () {
-  function extractConfigFromScriptTag(): Partial<Configuration> | null {
-    const script = document.querySelector("script#fs-agent");
-
-    if (!script) {
-      return null;
-    }
-
-    const collectorUrl = script.getAttribute("data-collector-url");
-    let resolvedCollectorUrl: string | CollectorFunction | undefined = collectorUrl || undefined;
-
-    // Look up registered collectors by name (e.g., "console", "panel")
-    if (collectorUrl && !isURL(collectorUrl)) {
-      const registered = window.Faultsense?.collectors?.[collectorUrl];
-      if (registered) {
-        resolvedCollectorUrl = registered;
-      } else {
-        console.warn(`[Faultsense]: No collector registered for '${collectorUrl}'. Did you forget to load the collector script?`);
-      }
-    }
-
-    return {
-      apiKey: script.getAttribute("data-api-key") || (typeof resolvedCollectorUrl === "function" ? "dev-collector" : undefined),
-      releaseLabel: script.getAttribute("data-release-label") || undefined,
-      collectorURL: resolvedCollectorUrl,
-      gcInterval: Number(script.getAttribute("data-gc-interval")) || undefined,
-      unloadGracePeriod: Number(script.getAttribute("data-unload-grace-period")) || undefined,
-      debug: script.getAttribute("data-debug") === "true" || undefined,
-      userContext: (() => {
-        const attr = script.getAttribute("data-user-context");
-        if (!attr) return undefined;
-        try { return JSON.parse(attr); } catch { return undefined; }
-      })(),
-    };
-  }
-
-  // Merge into the existing global — collectors may have registered before this script loaded.
-  // NOTE: Do not use esbuild's --global-name with this pattern, as it overwrites window.Faultsense
-  // with the module exports after this IIFE runs, destroying any previously registered collectors.
-  window.Faultsense = window.Faultsense || {};
-  window.Faultsense.collectors = window.Faultsense.collectors || {};
-  window.Faultsense.version = __FS_VERSION__;
-  window.Faultsense.init = init;
-  window.Faultsense.registerCleanupHook = (fn: () => void) => { cleanupHooks.push(fn); };
-
-  // Automatically initialize Faultsense if the fs-agent script tag exists.
-  // Tear down any prior init first — in Vite dev mode (e.g. TanStack Start)
-  // the classic script tag effectively runs twice and both inits would leak
-  // their listeners/MutationObserver otherwise.
-  document.addEventListener("DOMContentLoaded", function () {
-    const config = extractConfigFromScriptTag();
-    if (config) {
-      window.Faultsense!.cleanup?.();
-      window.Faultsense!.cleanup = init(config);
-
-      if (config.debug) {
-        console.log(
-          "[Faultsense]: initialized and cleanup function is stored as window.Faultsense.cleanup()"
-        );
-      }
-    }
-  });
-
-})();

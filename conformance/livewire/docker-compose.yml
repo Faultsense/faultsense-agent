@@ -22,7 +22,7 @@ services:
       - "3900:3900"
     volumes:
       # Hot-swap the agent bundle + collector without image rebuilds.
-      - ../../dist/faultsense-agent.min.js:/app/public/faultsense-agent.min.js:ro
+      - ../../dist/iife/faultsense-agent.min.js:/app/public/faultsense-agent.min.js:ro
       - ../shared/collector.js:/app/public/collector.js:ro
       # Mount the app source so Livewire component edits take effect
       # without rebuilding the image. Laravel's `artisan serve` picks

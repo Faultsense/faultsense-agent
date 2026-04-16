@@ -20,32 +20,52 @@ When a user clicks Place Order: if the order confirmation appears, the `success`
 
 ## Quick Start
 
-### Installation
+### Installation via CDN
 
 ```html
 <script
   defer
   id="fs-agent"
-  src="https://unpkg.com/faultsense@latest/dist/faultsense-agent.min.js"
+  src="https://cdn.faultsense.com/v0/faultsense-agent.min.js"
   data-release-label="0.0.0"
   data-collector-url="console"
   data-debug="true"
-/>
+></script>
 ```
+
+Pin to an exact version for production by swapping `v0` for the specific semver (e.g. `v0.5.0`).
 
 Or initialize manually:
 
 ```html
-<script src="https://unpkg.com/faultsense@latest/dist/faultsense-agent.min.js"></script>
+<script defer src="https://cdn.faultsense.com/v0/faultsense-console.min.js"></script>
+<script defer src="https://cdn.faultsense.com/v0/faultsense-agent.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   Faultsense.init({
     releaseLabel: '0.0.0',
-    collectorURL: Faultsense.collectors.consoleCollector,
+    collectorURL: Faultsense.collectors.console,
     debug: true
   });
 });
 </script>
+```
+
+### Installation via npm
+
+```bash
+npm install @faultsense/agent @faultsense/console-collector
+```
+
+```js
+import { init } from '@faultsense/agent';
+import { consoleCollector } from '@faultsense/console-collector';
+
+init({
+  releaseLabel: '0.0.0',
+  collectorURL: consoleCollector,
+  debug: true,
+});
 ```
 
 ### Tell Your AI to Instrument

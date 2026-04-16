@@ -6,10 +6,10 @@
 # this image is rebuilt by contributors and CI, so bundle install runs
 # once per image build and gem state is cached via BuildKit's cache mount.
 #
-# The agent bundle at /app/public/faultsense-agent.min.js is a symlink
-# to ../../../dist/faultsense-agent.min.js and is bind-mounted at
-# runtime by docker-compose so rebuilds of the agent are picked up
-# without rebuilding the image.
+# The agent bundle at /app/public/faultsense-agent.min.js is
+# bind-mounted at runtime by docker-compose from the canonical
+# dist/iife/faultsense-agent.min.js path, so rebuilds of the agent
+# (npm run build) are picked up without rebuilding the image.
 
 FROM ruby:3.3-slim
 

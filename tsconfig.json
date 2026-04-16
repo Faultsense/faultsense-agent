@@ -12,7 +12,19 @@
             "ES2022",
             "DOM",
             "DOM.Iterable"
-        ]
+        ],
+        "baseUrl": ".",
+        "paths": {
+            // Collector source files live inside the agent package but
+            // import `ApiPayload` (and other public types) from
+            // `@faultsense/agent` so the emitted .d.ts files reference
+            // the scoped package name — which resolves correctly once
+            // the collector is installed alongside @faultsense/agent in
+            // a consumer's node_modules. This paths mapping teaches
+            // tsc to resolve the self-reference to the local source
+            // during dev + declaration emit.
+            "@faultsense/agent": ["./src/index.ts"]
+        }
     },
     "include": [
         "src/**/*",
@@ -21,5 +33,6 @@
     "exclude": [
         "node_modules",
         "dist",
+        "collectors/*/dist"
     ]
 }

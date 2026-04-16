@@ -1,4 +1,4 @@
-import { ApiPayload } from "../types";
+import type { ApiPayload } from "@faultsense/agent";
 
 // --- State ---
 let shadowRoot: ShadowRoot | null = null;
@@ -873,8 +873,19 @@ export function cleanupPanel(): void {
 }
 
 // --- Collector Function ---
+//
+// `panelCollector` is the pure named export for bundler users:
+//
+//   import { panelCollector } from '@faultsense/panel-collector';
+//   import { init } from '@faultsense/agent';
+//   init({ collectorURL: panelCollector });
+//
+// The stateful panel UI is lazy — `createPanel()` runs on the first
+// payload, not at module load — so importing this file in a Node-only
+// environment doesn't crash. Self-registration onto window.Faultsense
+// lives in src/collectors/panel-auto.ts for the script-tag / CDN path.
 
-const panelCollector = (payload: ApiPayload): void => {
+export const panelCollector = (payload: ApiPayload): void => {
   if (state === "none") {
     createPanel();
   }
@@ -891,8 +902,3 @@ const panelCollector = (payload: ApiPayload): void => {
     updateBadge();
   }
 };
-
-// Self-register on the Faultsense global
-window.Faultsense = window.Faultsense || {};
-window.Faultsense.collectors = window.Faultsense.collectors || {};
-window.Faultsense.collectors.panel = panelCollector;

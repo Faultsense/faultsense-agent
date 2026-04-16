@@ -1,0 +1,55 @@
+{
+  "name": "@faultsense/console-collector",
+  "version": "0.5.3",
+  "description": "Console logger collector for Faultsense — logs each assertion result as a collapsible devtools group",
+  "type": "module",
+  "main": "./dist/cjs/index.cjs",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.cjs"
+    },
+    "./auto": {
+      "types": "./dist/esm/auto.d.ts",
+      "import": "./dist/esm/auto.js",
+      "require": "./dist/cjs/auto.cjs"
+    },
+    "./iife": "./dist/iife/faultsense-console.min.js",
+    "./package.json": "./package.json"
+  },
+  "sideEffects": [
+    "./dist/esm/auto.js",
+    "./dist/cjs/auto.cjs",
+    "./dist/iife/*"
+  ],
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Faultsense/faultsense-agent.git",
+    "directory": "collectors/console"
+  },
+  "keywords": [
+    "testing",
+    "assertions",
+    "observability",
+    "monitoring",
+    "faultsense",
+    "console"
+  ],
+  "author": "Fault Sense",
+  "license": "FSL-1.1-ALv2",
+  "homepage": "https://github.com/Faultsense/faultsense-agent",
+  "bugs": {
+    "url": "https://github.com/Faultsense/faultsense-agent/issues"
+  },
+  "peerDependencies": {
+    "@faultsense/agent": "^0.5.3"
+  }
+}

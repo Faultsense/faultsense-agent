@@ -1,0 +1,13 @@
+import { Assertion, CompletedAssertion } from "../types";
+export declare function findAssertion(assertion: Assertion, allAssertions: Assertion[]): Assertion | undefined;
+export declare const getPendingAssertions: (assertions: Assertion[]) => Assertion[];
+export declare const getPendingDomAssertions: (assertions: Assertion[]) => Assertion[];
+export declare const getAssertionsForMpaMode: (assertions: Assertion[]) => Assertion[];
+export declare function isAssertionPending(assertion: Assertion): boolean;
+export declare function isAssertionCompleted(assertion: Assertion): boolean;
+export declare function retryCompletedAssertion(assertion: Assertion | CompletedAssertion, newAssertion: Assertion): void;
+export declare function getAssertionsToSettle(completedAssertions: CompletedAssertion[]): CompletedAssertion[];
+export declare function getSiblingGroup(assertion: Assertion, allAssertions: Assertion[]): Assertion[];
+export declare function dismissSiblings(assertion: Assertion, allAssertions: Assertion[]): CompletedAssertion[];
+export declare function dismissAssertion(assertion: Assertion): CompletedAssertion | null;
+export declare function completeAssertion(assertion: Assertion, success: boolean): CompletedAssertion | null;

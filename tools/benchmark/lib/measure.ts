@@ -292,7 +292,7 @@ export async function runBenchmark(
   checkCiRefusal(allowCi);
 
   const rootDir = path.resolve(__dirname, "../../..");
-  const agentPath = path.resolve(rootDir, "dist/faultsense-agent.min.js");
+  const agentPath = path.resolve(rootDir, "dist/iife/faultsense-agent.min.js");
   checkBuildArtifact(agentPath);
 
   const injectionDir = path.resolve(__dirname, "injection");

@@ -1,4 +1,4 @@
-import { ApiPayload, CompletedAssertion, Configuration } from "../types";
+import { ApiPayload, CollectorFunction, CompletedAssertion, Configuration } from "../types";
 import { createLogger } from "../utils/logger";
 import { isURL } from "../utils/object";
 
@@ -110,7 +110,10 @@ export function sendToCollector(
 ): void {
   const collector = resolveCollector(config);
   if (typeof collector === 'function') {
-    sendToFunction(assertions, { ...config, collectorURL: collector });
+    // typeof narrows to the structural `Function` built-in, which is wider
+    // than CollectorFunction. Cast back to the typed callback shape so the
+    // spread into Configuration keeps its discriminated-union typing.
+    sendToFunction(assertions, { ...config, collectorURL: collector as CollectorFunction });
   } else {
     sendToServer(assertions, config);
   }

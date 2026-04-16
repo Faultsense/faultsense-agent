@@ -1,15 +1,34 @@
 {
-  "name": "faultsense",
-  "version": "0.4.2",
+  "name": "@faultsense/agent",
+  "version": "0.5.3",
   "description": "A Framework & Language Agnostic Application Feature Monitor for the Frontend",
-  "main": "dist/faultsense-agent.min.js",
+  "type": "module",
+  "main": "./dist/cjs/index.cjs",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.cjs"
+    },
+    "./auto": {
+      "types": "./dist/esm/auto.d.ts",
+      "import": "./dist/esm/auto.js",
+      "require": "./dist/cjs/auto.cjs"
+    },
+    "./iife": "./dist/iife/faultsense-agent.min.js",
+    "./package.json": "./package.json"
+  },
+  "sideEffects": [
+    "./dist/esm/auto.js",
+    "./dist/cjs/auto.cjs",
+    "./dist/iife/*"
+  ],
   "files": [
-    "dist/faultsense-agent.min.js",
-    "dist/faultsense-console.min.js",
-    "dist/faultsense-panel.min.js",
+    "dist/",
     "README.md",
-    "LICENSE",
-    "assets/"
+    "LICENSE"
   ],
   "repository": {
     "type": "git",
@@ -33,7 +52,8 @@
     "build:console": "node scripts/build.mjs console",
     "build:panel": "node scripts/build.mjs panel",
     "build:collectors": "node scripts/build.mjs console && node scripts/build.mjs panel",
-    "size": "echo \"📦 faultsense-agent.min.js\" && ls -lh dist/faultsense-agent.min.js | awk '{print \"   Raw: \" $5 \"B\"}' && echo \"   Gzipped: $(echo \"scale=1; $(gzip -c dist/faultsense-agent.min.js | wc -c | tr -d ' ') / 1024\" | bc)kb\"",
+    "build:types": "node scripts/build.mjs types",
+    "size": "echo \"📦 faultsense-agent.min.js\" && ls -lh dist/iife/faultsense-agent.min.js | awk '{print \"   Raw: \" $5 \"B\"}' && echo \"   Gzipped: $(echo \"scale=1; $(gzip -c dist/iife/faultsense-agent.min.js | wc -c | tr -d ' ') / 1024\" | bc)kb\"",
     "build:size": "npm run build:agent && npm run size",
     "prepublishOnly": "npm run build",
     "test": "vitest",

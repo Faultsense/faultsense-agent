@@ -398,8 +398,10 @@ function createAssertions(
       : {};
     const mergedModifiers = { ...metadata.modifiers, ...resolvedMods };
 
-    // Warn about unsupported modifiers for this assertion type
-    const allowedMods = supportedModifiersByType[typeEntry.type];
+    // Warn about unsupported modifiers for this assertion type.
+    // typeEntry.type is widened to string here because typeEntry comes from
+    // parser output — cast to the record's key type so the lookup typechecks.
+    const allowedMods = supportedModifiersByType[typeEntry.type as keyof typeof supportedModifiersByType];
     if (allowedMods) {
       for (const mod of Object.keys(resolvedMods)) {
         if (!allowedMods.includes(mod)) {

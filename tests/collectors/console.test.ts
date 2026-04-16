@@ -3,8 +3,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { ApiPayload } from "../../src/types";
 
-// Import triggers self-registration
-import "../../src/collectors/console";
+// Import the -auto entry to trigger self-registration onto
+// window.Faultsense.collectors.console. The pure entry at
+// src/collectors/console.ts only exports the collector function.
+import "../../src/collectors/console-auto";
 
 function makePayload(overrides: Partial<ApiPayload> = {}): ApiPayload {
   return {

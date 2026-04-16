@@ -21,7 +21,7 @@ services:
     ports:
       - "4000:4000"
     volumes:
-      - ../../dist/faultsense-agent.min.js:/app/priv/static/faultsense-agent.min.js:ro
+      - ../../dist/iife/faultsense-agent.min.js:/app/priv/static/faultsense-agent.min.js:ro
       - ../shared/collector.js:/app/priv/static/collector.js:ro
     environment:
       MIX_ENV: dev

@@ -4,8 +4,10 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { ApiPayload } from "../../src/types";
 import { cleanupPanel } from "../../src/collectors/panel";
 
-// Import triggers self-registration
-import "../../src/collectors/panel";
+// Import the -auto entry to trigger self-registration onto
+// window.Faultsense.collectors.panel. The pure entry at
+// src/collectors/panel.ts only exports the collector function.
+import "../../src/collectors/panel-auto";
 
 function makePayload(overrides: Partial<ApiPayload> = {}): ApiPayload {
   return {

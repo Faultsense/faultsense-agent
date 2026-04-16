@@ -1,0 +1,33 @@
+{
+  // Declaration-only tsc pass, driven by scripts/build.mjs.
+  //
+  // The root tsconfig.json has "noEmit": true and includes broad paths
+  // so the editor / test runner stay happy across the whole src tree.
+  // This file narrows to the two public entries (core + auto) and flips
+  // emit on for .d.ts generation.
+  //
+  // Why we can't just use tsc on the whole src tree: several files (e.g.
+  // resolvers/http.ts, resolvers/emitted.ts) carry pre-existing type
+  // errors from refactors that never finished. None of those files are
+  // imported by the public entries, so scoping "files" to core + auto
+  // lets the declaration pass succeed without chasing unrelated drift.
+  // Broader type-hygiene cleanup is out of scope for the distribution
+  // refactor.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist/esm",
+    "rootDir": "src"
+  },
+  "files": [
+    "src/index.ts",
+    "src/auto.ts",
+    "src/collectors/panel.ts",
+    "src/collectors/panel-auto.ts",
+    "src/collectors/console.ts",
+    "src/collectors/console-auto.ts"
+  ],
+  "include": []
+}

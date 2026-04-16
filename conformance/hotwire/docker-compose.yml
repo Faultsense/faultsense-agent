@@ -22,7 +22,7 @@ services:
       - "3300:3300"
     volumes:
       # Hot-swap the agent bundle + collector without image rebuilds.
-      - ../../dist/faultsense-agent.min.js:/app/public/faultsense-agent.min.js:ro
+      - ../../dist/iife/faultsense-agent.min.js:/app/public/faultsense-agent.min.js:ro
       - ../shared/collector.js:/app/public/collector.js:ro
       # Mount the Rails app source so view/controller edits take effect
       # without rebuilding the image. Rails dev mode auto-reloads on

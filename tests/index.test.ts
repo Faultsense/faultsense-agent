@@ -1,5 +1,5 @@
 /**
- * Tests for the auto-init IIFE in src/index.ts.
+ * Tests for the auto-init IIFE in src/auto.ts.
  *
  * The IIFE registers a DOMContentLoaded listener that reads `<script id="fs-agent">`
  * attributes into a config and calls init(). In Vite dev mode (e.g. TanStack Start)
@@ -12,7 +12,7 @@ import * as resolveModule from "../src/assertions/server";
 
 // Importing this module runs the IIFE which attaches the DOMContentLoaded
 // listener and exposes window.Faultsense.init + cleanup.
-import "../src/index";
+import "../src/auto";
 
 describe("auto-init (DOMContentLoaded)", () => {
   beforeEach(() => {
