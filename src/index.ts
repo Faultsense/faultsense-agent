@@ -138,6 +138,7 @@ export function init(initialConfig: Partial<Configuration>): () => void {
   // point, matching the auto-install script-tag flow.
   window.Faultsense = window.Faultsense || {};
   window.Faultsense.setUserContext = assertionManager.setUserContext;
+  window.Faultsense.setUserCohorts = assertionManager.setUserCohorts;
 
   // Run initial check
   assertionManager.checkAssertions();

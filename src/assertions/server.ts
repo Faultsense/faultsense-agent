@@ -20,7 +20,8 @@ function toPayload(
     attempts: assertion.attempts || [],
     condition_key: assertion.conditionKey || "",
     release_label: config.releaseLabel,
-    element_snapshot: assertion.elementSnapshot
+    element_snapshot: assertion.elementSnapshot,
+    agent_version: __FS_VERSION__
   };
 
   if (assertion.errorContext) {
@@ -29,6 +30,10 @@ function toPayload(
 
   if (config.userContext) {
     payload.user_context = config.userContext;
+  }
+
+  if (config.userCohorts) {
+    payload.user_cohorts = config.userCohorts;
   }
 
   return payload;

@@ -3,7 +3,7 @@
 /**
  * PAT-02 — Delayed-commit mutation
  *
- * Catalog: docs/public/agent/mutation-patterns.md#pat-02-delayed-commit-mutation
+ * Catalog: docs/public/conformance/mutation-patterns.md#pat-02-delayed-commit-mutation
  *
  * A transient DOM mutation (loading class, spinner, placeholder, mid-swap
  * attributes) lands between the trigger and the final outcome. The agent

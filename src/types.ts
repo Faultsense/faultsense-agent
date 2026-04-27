@@ -9,6 +9,7 @@ export interface Configuration {
   collectorURL: string | CollectorFunction;
   debug: boolean;
   userContext?: Record<string, any>;
+  userCohorts?: Record<string, string>;
 }
 
 // Converts HTMLElement into an Assertion;
@@ -126,6 +127,8 @@ export interface ApiPayload {
     colno?: number;
   };
   user_context?: Record<string, any>;
+  user_cohorts?: Record<string, string>;
+  agent_version: string;
   timestamp: string; // ISO String using start timestamp
 }
 
@@ -139,6 +142,7 @@ declare global {
       collectors?: Record<string, CollectorFunction>;
       registerCleanupHook?: (fn: () => void) => void;
       setUserContext?: (context: Record<string, any> | undefined) => void;
+      setUserCohorts?: (cohorts: Record<string, string> | undefined) => void;
     };
   }
 

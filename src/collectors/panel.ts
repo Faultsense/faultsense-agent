@@ -343,7 +343,8 @@ function createPanel(): void {
 
   const title = document.createElement("div");
   title.className = "fs-title";
-  title.textContent = "FaultSense";
+  title.textContent = `Faultsense v${window.Faultsense?.version || "?"}`;
+
 
   const controls = document.createElement("div");
   controls.className = "fs-controls";

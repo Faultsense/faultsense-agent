@@ -49,6 +49,11 @@ import { isURL } from "./utils/object";
         if (!attr) return undefined;
         try { return JSON.parse(attr); } catch { return undefined; }
       })(),
+      userCohorts: (() => {
+        const attr = script.getAttribute("data-user-cohorts");
+        if (!attr) return undefined;
+        try { return JSON.parse(attr); } catch { return undefined; }
+      })(),
     };
   }
 

@@ -3,7 +3,7 @@
 /**
  * PAT-09 — Hydration upgrade
  *
- * Catalog: docs/public/agent/mutation-patterns.md#pat-09-hydration-upgrade
+ * Catalog: docs/public/conformance/mutation-patterns.md#pat-09-hydration-upgrade
  *
  * SSR-rendered nodes gain attributes, event listeners, or children when
  * the client hydrates. Element identity is preserved across hydration.

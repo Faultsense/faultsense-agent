@@ -3,7 +3,7 @@
 /**
  * PAT-01 — Pre-existing target
  *
- * Catalog: docs/public/agent/mutation-patterns.md#pat-01-pre-existing-target
+ * Catalog: docs/public/conformance/mutation-patterns.md#pat-01-pre-existing-target
  *
  * A selector that already matches at trigger time must NOT satisfy
  * mutation-observed assertion types (`added`, `removed`). Pre-existing

@@ -3,7 +3,7 @@
 /**
  * PAT-04 — morphdom preserved-identity
  *
- * Catalog: docs/public/agent/mutation-patterns.md#pat-04-morphdom-preserved-identity
+ * Catalog: docs/public/conformance/mutation-patterns.md#pat-04-morphdom-preserved-identity
  *
  * Target node identity is preserved while attributes and/or children are
  * patched in place. The resulting mutation records are `attributes` or

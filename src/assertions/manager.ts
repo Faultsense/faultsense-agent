@@ -470,6 +470,10 @@ export function createAssertionManager(config: Configuration) {
     config.userContext = context;
   };
 
+  const setUserCohorts = (cohorts: Record<string, string> | undefined): void => {
+    config.userCohorts = cohorts;
+  };
+
   // Expose the API for managing Processors, Resolvers and interacting with the manager
   return {
     handleEvent,
@@ -487,5 +491,6 @@ export function createAssertionManager(config: Configuration) {
     setAssertionCountCallback,
     getPendingAssertionCount,
     setUserContext,
+    setUserCohorts,
   };
 }

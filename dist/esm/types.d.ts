@@ -7,6 +7,7 @@ export interface Configuration {
     collectorURL: string | CollectorFunction;
     debug: boolean;
     userContext?: Record<string, any>;
+    userCohorts?: Record<string, string>;
 }
 export type ElementProcessor = (elements: HTMLElement[]) => Assertion[];
 export type ElementResolver = (addedOrUpdatedElements: HTMLElement[], removedElements: HTMLElement[], updatedElements: HTMLElement[], assertions: Assertion[]) => CompletedAssertion[];
@@ -83,6 +84,8 @@ export interface ApiPayload {
         colno?: number;
     };
     user_context?: Record<string, any>;
+    user_cohorts?: Record<string, string>;
+    agent_version: string;
     timestamp: string;
 }
 declare global {
@@ -94,6 +97,7 @@ declare global {
             collectors?: Record<string, CollectorFunction>;
             registerCleanupHook?: (fn: () => void) => void;
             setUserContext?: (context: Record<string, any> | undefined) => void;
+            setUserCohorts?: (cohorts: Record<string, string> | undefined) => void;
         };
     }
     const __FS_VERSION__: string;

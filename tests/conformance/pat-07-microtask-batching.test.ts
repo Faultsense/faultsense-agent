@@ -3,7 +3,7 @@
 /**
  * PAT-07 — Microtask batching
  *
- * Catalog: docs/public/agent/mutation-patterns.md#pat-07-microtask-batching
+ * Catalog: docs/public/conformance/mutation-patterns.md#pat-07-microtask-batching
  *
  * Multiple independent mutations arrive in a single MutationObserver
  * callback because they were produced synchronously (queueMicrotask,

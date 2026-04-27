@@ -1,6 +1,6 @@
 {
   "name": "@faultsense/console-collector",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "Console logger collector for Faultsense — logs each assertion result as a collapsible devtools group",
   "type": "module",
   "main": "./dist/cjs/index.cjs",
@@ -50,6 +50,6 @@
     "url": "https://github.com/Faultsense/faultsense-agent/issues"
   },
   "peerDependencies": {
-    "@faultsense/agent": "^0.5.4"
+    "@faultsense/agent": "^0.5.5"
   }
 }

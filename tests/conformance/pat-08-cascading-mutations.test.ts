@@ -3,7 +3,7 @@
 /**
  * PAT-08 — Cascading mutations
  *
- * Catalog: docs/public/agent/mutation-patterns.md#pat-08-cascading-mutations
+ * Catalog: docs/public/conformance/mutation-patterns.md#pat-08-cascading-mutations
  *
  * A single trigger causes mutations across unrelated subtrees. The `oob`
  * (out-of-band) mechanism expresses the sibling case: "when the primary

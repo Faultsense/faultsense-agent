@@ -1,4 +1,4 @@
-/*! Faultsense panel collector (cjs/auto) v0.5.4 | FSL-1.1-ALv2 | https://faultsense.com */
+/*! Faultsense panel collector (cjs/auto) v0.5.5 | FSL-1.1-ALv2 | https://faultsense.com */
 "use strict";
 
 // src/collectors/panel.ts
@@ -317,7 +317,7 @@ function createPanel() {
   header.className = "fs-header";
   const title = document.createElement("div");
   title.className = "fs-title";
-  title.textContent = "FaultSense";
+  title.textContent = `Faultsense v${window.Faultsense?.version || "?"}`;
   const controls = document.createElement("div");
   controls.className = "fs-controls";
   const xrayToggleBtn = document.createElement("button");

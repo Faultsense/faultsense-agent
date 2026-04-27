@@ -1,4 +1,4 @@
-/*! Faultsense agent (cjs/auto) v0.5.4 | FSL-1.1-ALv2 | https://faultsense.com */
+/*! Faultsense agent (cjs/auto) v0.5.5 | FSL-1.1-ALv2 | https://faultsense.com */
 "use strict";
 
 // src/types.ts
@@ -197,13 +197,17 @@ function toPayload(assertion, config) {
     attempts: assertion.attempts || [],
     condition_key: assertion.conditionKey || "",
     release_label: config.releaseLabel,
-    element_snapshot: assertion.elementSnapshot
+    element_snapshot: assertion.elementSnapshot,
+    agent_version: "0.5.5"
   };
   if (assertion.errorContext) {
     payload.error_context = assertion.errorContext;
   }
   if (config.userContext) {
     payload.user_context = config.userContext;
+  }
+  if (config.userCohorts) {
+    payload.user_cohorts = config.userCohorts;
   }
   return payload;
 }
@@ -1586,6 +1590,9 @@ function createAssertionManager(config) {
   const setUserContext = (context) => {
     config.userContext = context;
   };
+  const setUserCohorts = (cohorts) => {
+    config.userCohorts = cohorts;
+  };
   return {
     handleEvent,
     handleCustomEvent,
@@ -1601,7 +1608,8 @@ function createAssertionManager(config) {
     handlePageUnload,
     setAssertionCountCallback,
     getPendingAssertionCount,
-    setUserContext
+    setUserContext,
+    setUserCohorts
   };
 }
 
@@ -1708,7 +1716,7 @@ var cleanupHooks = [];
 function registerCleanupHook(fn) {
   cleanupHooks.push(fn);
 }
-var version = "0.5.4";
+var version = "0.5.5";
 function init(initialConfig) {
   let observer = null;
   const config = setConfiguration(initialConfig);
@@ -1777,6 +1785,7 @@ function init(initialConfig) {
   }
   window.Faultsense = window.Faultsense || {};
   window.Faultsense.setUserContext = assertionManager.setUserContext;
+  window.Faultsense.setUserCohorts = assertionManager.setUserCohorts;
   assertionManager.checkAssertions();
   return () => {
     assertionManager.clearActiveAssertions();
@@ -1836,6 +1845,15 @@ function init(initialConfig) {
       debug: script.getAttribute("data-debug") === "true" || void 0,
       userContext: (() => {
         const attr = script.getAttribute("data-user-context");
+        if (!attr) return void 0;
+        try {
+          return JSON.parse(attr);
+        } catch {
+          return void 0;
+        }
+      })(),
+      userCohorts: (() => {
+        const attr = script.getAttribute("data-user-cohorts");
         if (!attr) return void 0;
         try {
           return JSON.parse(attr);

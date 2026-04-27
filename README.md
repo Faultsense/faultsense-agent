@@ -194,6 +194,7 @@ Keys must be stable across releases. Human-readable labels are configured on the
 | `timeout` | number | No | 1000 | Default assertion timeout (ms) |
 | `debug` | boolean | No | false | Enable console logging |
 | `userContext` | `Record<string, any>` | No | — | Arbitrary context attached to all payloads |
+| `userCohorts` | `Record<string, string>` | No | — | Low-cardinality cohort dimensions for per-cohort assertion health |
 
 ## Event Payload
 
@@ -214,6 +215,8 @@ interface EventPayload {
   status: "passed" | "failed";
   timestamp: string;
   user_context?: Record<string, any>;
+  user_cohorts?: Record<string, string>;
+  agent_version: string;
   error_context?: {
     message: string;
     stack?: string;

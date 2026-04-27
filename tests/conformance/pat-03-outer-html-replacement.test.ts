@@ -3,7 +3,7 @@
 /**
  * PAT-03 — outerHTML replacement
  *
- * Catalog: docs/public/agent/mutation-patterns.md#pat-03-outerhtml-replacement
+ * Catalog: docs/public/conformance/mutation-patterns.md#pat-03-outerhtml-replacement
  *
  * The trigger host's target node is swapped wholesale: old node lands in
  * `removedElements`, new node in `addedElements`, and `updatedElements`

@@ -3,7 +3,7 @@
 /**
  * PAT-06 — Text-only mutation
  *
- * Catalog: docs/public/agent/mutation-patterns.md#pat-06-text-only-mutation
+ * Catalog: docs/public/conformance/mutation-patterns.md#pat-06-text-only-mutation
  *
  * The only change is a `textContent` or `characterData` update — no element
  * structure change. src/processors/mutations.ts:42-43 promotes the

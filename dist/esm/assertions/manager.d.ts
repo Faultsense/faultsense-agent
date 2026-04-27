@@ -15,4 +15,5 @@ export declare function createAssertionManager(config: Configuration): {
     setAssertionCountCallback: (callback: (count: number) => void) => void;
     getPendingAssertionCount: () => number;
     setUserContext: (context: Record<string, any> | undefined) => void;
+    setUserCohorts: (cohorts: Record<string, string> | undefined) => void;
 };

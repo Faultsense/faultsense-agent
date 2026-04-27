@@ -3,7 +3,7 @@
 /**
  * PAT-05 — Detach-reattach
  *
- * Catalog: docs/public/agent/mutation-patterns.md#pat-05-detach-reattach
+ * Catalog: docs/public/conformance/mutation-patterns.md#pat-05-detach-reattach
  *
  * A node briefly leaves the DOM and then returns. Two sub-patterns:
  * (a) re-added to the same parent (React keyed reorder, list sort), and

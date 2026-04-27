@@ -3,7 +3,7 @@
 /**
  * PAT-10 — Shadow-DOM traversal
  *
- * Catalog: docs/public/agent/mutation-patterns.md#pat-10-shadow-dom-traversal
+ * Catalog: docs/public/conformance/mutation-patterns.md#pat-10-shadow-dom-traversal
  *
  * Status: GAP. The agent does not currently traverse shadow root boundaries.
  * `src/index.ts:67-76` attaches a single MutationObserver to `document.body`
