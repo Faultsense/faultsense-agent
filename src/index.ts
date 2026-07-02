@@ -30,7 +30,7 @@ import { createLogger } from "./utils/logger";
 // the @faultsense/panel-collector and @faultsense/console-collector
 // packages import it via `import type { ApiPayload } from "@faultsense/agent"`.
 // Keeping the re-export here is what makes that import path valid.
-export type { ApiPayload, Configuration, CollectorFunction } from "./types";
+export type { ApiPayload, Configuration, CollectorFunction, SpecEntry, FsAttr } from "./types";
 
 // Cleanup hooks registered by external collectors (e.g., panel collector).
 // Shared module state: collectors call registerCleanupHook() before init(),
@@ -59,6 +59,14 @@ export function init(initialConfig: Partial<Configuration>): () => void {
   }
 
   const assertionManager = createAssertionManager(config);
+
+  // Apply any JSON spec passed in config before discovery starts.
+  // setSpec installs document-level listeners for any event:* triggers in
+  // the spec via customEventRegistry.ensureListener (idempotent — the HTML
+  // custom-event registration step later is safe to run alongside).
+  if (config.spec) {
+    assertionManager.setSpec(config.spec);
+  }
 
   // Wire up the dom resolver's debug logger so wait-for-pass no-match warnings
   // fire in debug mode. Cleared in the cleanup closure below.
@@ -108,27 +116,42 @@ export function init(initialConfig: Partial<Configuration>): () => void {
     characterData: true,
   });
 
-  // process all mount, load, or invariant triggered nodes already in the DOM
-  const elements = document.querySelectorAll(
-    `[${assertionTriggerAttr}="mount"], [${assertionTriggerAttr}="load"], [${assertionTriggerAttr}="invariant"]`
+  // process all mount, load, or invariant triggered nodes already in the DOM —
+  // skipped entirely when ignoreHtmlAttrs is set.
+  if (!config.ignoreHtmlAttrs) {
+    const elements = document.querySelectorAll(
+      `[${assertionTriggerAttr}="mount"], [${assertionTriggerAttr}="load"], [${assertionTriggerAttr}="invariant"]`
+    );
+    assertionManager.processElements(Array.from(elements) as HTMLElement[], [
+      "mount",
+      "load",
+      "invariant",
+    ]);
+  }
+
+  // JSON-only initial scan. The HTML scan above seeded targets via
+  // querySelectorAll('[fs-trigger=...]'); JSON entries have no such attribute
+  // marker, so we run a separate spec-registry scan against document.body.
+  assertionManager.scanSpecForTriggers(
+    ["mount", "load", "invariant"],
+    document.body
   );
-  assertionManager.processElements(Array.from(elements) as HTMLElement[], [
-    "mount",
-    "load",
-    "invariant",
-  ]);
 
   // If the page loaded while offline, immediately process offline-triggered elements
   if (!navigator.onLine) {
     handleOffline();
   }
 
-  // Register elements with custom event triggers (event:eventName)
-  const customEventElements = document.querySelectorAll(
-    `[${assertionTriggerAttr}^="event:"]`
-  );
-  for (const el of Array.from(customEventElements) as HTMLElement[]) {
-    assertionManager.registerCustomEventElement(el);
+  // Register elements with custom event triggers (event:eventName) — gated
+  // when ignoreHtmlAttrs is set; JSON-spec entries with event:* triggers
+  // installed their own document listeners via setSpec/applySpecDiff above.
+  if (!config.ignoreHtmlAttrs) {
+    const customEventElements = document.querySelectorAll(
+      `[${assertionTriggerAttr}^="event:"]`
+    );
+    for (const el of Array.from(customEventElements) as HTMLElement[]) {
+      assertionManager.registerCustomEventElement(el);
+    }
   }
 
   // Ensure window.Faultsense exists and expose setUserContext on it.
@@ -139,6 +162,9 @@ export function init(initialConfig: Partial<Configuration>): () => void {
   window.Faultsense = window.Faultsense || {};
   window.Faultsense.setUserContext = assertionManager.setUserContext;
   window.Faultsense.setUserCohorts = assertionManager.setUserCohorts;
+  window.Faultsense.setSpec = assertionManager.setSpec;
+  window.Faultsense.addSpec = assertionManager.addSpec;
+  window.Faultsense.getSpec = assertionManager.getSpec;
 
   // Run initial check
   assertionManager.checkAssertions();

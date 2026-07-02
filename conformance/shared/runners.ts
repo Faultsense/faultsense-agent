@@ -94,6 +94,16 @@ export interface HarnessConfig {
    * have a clean signal, leave it unset and tune `settleMs`.
    */
   waitForReady?: (page: Page) => Promise<void>;
+
+  /**
+   * URL path to navigate to. Defaults to `/`. Override when a driver
+   * needs to exercise a non-default route on the same harness —
+   * notably `/?mode=json` for the htmx-json conformance pass, where the
+   * server flips the page to load the agent in `ignoreHtmlAttrs` mode
+   * driven by a hand-crafted JSON spec instead of the in-template
+   * fs-* attrs.
+   */
+  urlPath?: string;
 }
 
 type Runner = (page: Page, config: HarnessConfig) => Promise<void>;
@@ -221,7 +231,7 @@ const emptyStateShown: Runner = async (page, config) => {
 
   // Empty state is rendered on initial mount. Re-navigate so the mount
   // trigger captures it after the beforeEach reset.
-  await page.goto("/");
+  await page.goto(config.urlPath ?? "/");
   await page.waitForTimeout(config.settleMs ?? 300);
   if (config.waitForReady) {
     await config.waitForReady(page);
@@ -322,7 +332,7 @@ const hydrationIslandMount: Runner = async (page, config) => {
   // Re-navigate so the scenario starts from a freshly-mounted page
   // regardless of what the beforeEach did, then give hydration time
   // to settle before we count payloads.
-  await page.goto("/");
+  await page.goto(config.urlPath ?? "/");
   await page.waitForTimeout(config.settleMs ?? 500);
   if (config.waitForReady) {
     await config.waitForReady(page);
@@ -383,7 +393,7 @@ export async function standardBeforeEach(
   if (config.resetBackend) {
     await config.resetBackend(page, request);
   }
-  await page.goto("/");
+  await page.goto(config.urlPath ?? "/");
   await page.waitForTimeout(config.settleMs ?? 300);
   if (config.waitForReady) {
     await config.waitForReady(page);

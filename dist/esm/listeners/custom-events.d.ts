@@ -9,6 +9,14 @@ export interface CustomEventRegistry {
     deregisterElement(eventName: string, element: HTMLElement): void;
     getElements(eventName: string): Set<HTMLElement> | undefined;
     isRegistered(eventName: string): boolean;
+    hasElementsFor(eventName: string): boolean;
+    /**
+     * Remove the document-level listener for an event name. Caller is
+     * responsible for ensuring no other source still references this event —
+     * the JSON spec registry tracks its own references and the manager
+     * cross-checks before calling this. Idempotent.
+     */
+    deregisterEventName(eventName: string): void;
     deregisterAll(): void;
 }
 export declare function createCustomEventRegistry(): CustomEventRegistry;

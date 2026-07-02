@@ -1,22 +1,24 @@
 import { type Assertion, type ElementProcessor } from "../types";
+import { type ElementAssertionMetadata } from "../parsers/shared";
+import type { SpecRegistry } from "../assertions/spec-registry";
 export declare class AssertionError extends Error {
     details: Record<string, any>;
     constructor(message: string, details: Record<string, any>);
 }
 /**
- * Parse a type attribute value into a selector and inline modifiers.
- * Format: "selector[key=value][key=value]..."
- * Handles nested brackets in values (e.g., regex character classes like [a-z])
+ * Per-invocation context for processElements. Bundled as an options object
+ * so the call site stays readable as the agent grows new cross-cutting
+ * concerns (currently: specRegistry, ignoreHtmlAttrs).
  */
-export declare function parseTypeValue(raw: string): {
-    selector: string;
-    modifiers: Record<string, string>;
-};
-/**
- * Resolve inline modifiers to the format resolvers expect.
- * Reserved keys (text-matches, classlist) pass through.
- * Unreserved keys become attrs-match entries.
- */
-export declare function resolveInlineModifiers(inlineMods: Record<string, string>): Record<string, string>;
-export declare function createElementProcessor(triggers: string[], eventMode?: boolean, event?: Event): ElementProcessor;
-export declare function processElements(targets: HTMLElement[], triggers: string[], eventMode?: boolean, event?: Event): Assertion[];
+export interface ProcessOptions {
+    triggers: string[];
+    eventMode?: boolean;
+    event?: Event;
+    /** JSON spec source, when configured. Undefined for HTML-only agents. */
+    specRegistry?: SpecRegistry;
+    /** When true, HTML-attribute discovery is skipped — JSON-only mode. */
+    ignoreHtmlAttrs?: boolean;
+}
+export declare function createElementProcessor(opts: ProcessOptions): ElementProcessor;
+export declare function processElements(targets: HTMLElement[], opts: ProcessOptions): Assertion[];
+export declare function createAssertions(element: HTMLElement, metadata: ElementAssertionMetadata): Assertion[];

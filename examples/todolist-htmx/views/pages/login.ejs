@@ -2,7 +2,8 @@
   <div class="login-card">
     <h1 class="login-title">Faultsense Todo Demo</h1>
     <p class="login-subtitle">Sign in to continue</p>
-    <form class="login-form" hx-post="/login" hx-target="#login-error-slot" hx-swap="innerHTML">
+    <%# Preserve ?mode=json across login so the destination keeps the toggle. %>
+    <form class="login-form" hx-post="/login<%= (typeof useJsonMode !== 'undefined' && useJsonMode) ? '?mode=json' : '' %>" hx-target="#login-error-slot" hx-swap="innerHTML">
       <input
         type="text"
         name="username"

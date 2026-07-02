@@ -11,19 +11,45 @@
       defer ensures execution order matches document order.
     -->
     <script src="/faultsense-panel.min.js" defer></script>
-    <script
-      src="/faultsense-agent.min.js"
-      defer
-      id="fs-agent"
-      data-release-label="1.0.0"
-      data-collector-url="panel"
-      data-gc-interval="10000"
-      data-debug="true"
-    ></script>
+    <% if (typeof useJsonMode !== 'undefined' && useJsonMode) { %>
+      <!--
+        JSON-spec mode: load agent without auto-init (no `id="fs-agent"`),
+        load the hand-crafted spec, then call init() with
+        `ignoreHtmlAttrs: true` once the DOM is parsed. fs-* attrs in the
+        rendered templates stay in place but are inert. Auto-init in
+        auto.ts also defers to DOMContentLoaded; mirroring that here so
+        the initial mount/invariant scan sees the full body.
+      -->
+      <script src="/faultsense-agent.min.js" defer></script>
+      <script src="/todolist-htmx-spec.js" defer></script>
+      <script defer>
+        document.addEventListener('DOMContentLoaded', function () {
+          window.Faultsense.init({
+            apiKey: 'demo',
+            releaseLabel: '1.0.0-json',
+            collectorURL: window.Faultsense.collectors.panel,
+            gcInterval: 10000,
+            debug: true,
+            ignoreHtmlAttrs: true,
+            spec: window.TODOLIST_HTMX_SPEC,
+          })
+        })
+      </script>
+    <% } else { %>
+      <script
+        src="/faultsense-agent.min.js"
+        defer
+        id="fs-agent"
+        data-release-label="1.0.0"
+        data-collector-url="panel"
+        data-gc-interval="10000"
+        data-debug="true"
+      ></script>
+    <% } %>
     <script src="/htmx.min.js" defer></script>
     <script src="/todos.js" defer></script>
   </head>
-  <body hx-boost="true">
+  <body hx-boost="true"<% if (typeof useJsonMode !== 'undefined' && useJsonMode) { %> hx-headers='{"X-Faultsense-Mode": "json"}'<% } %>>
     <%- body %>
     <!--
       Panel collector host. hx-preserve="true" tells HTMX not to destroy

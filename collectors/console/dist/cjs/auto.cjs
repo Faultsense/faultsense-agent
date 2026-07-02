@@ -1,4 +1,4 @@
-/*! Faultsense console collector (cjs/auto) v0.5.5 | FSL-1.1-ALv2 | https://faultsense.com */
+/*! Faultsense console collector (cjs/auto) v0.6.0 | FSL-1.1-ALv2 | https://faultsense.com */
 "use strict";
 
 // src/collectors/console.ts

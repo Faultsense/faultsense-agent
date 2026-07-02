@@ -14,7 +14,7 @@ describe("Faultsense Agent - Assertion Type: added", () => {
     ctx.cleanup();
   });
 
-  it("added assertion should pass", async () => {
+  it("html: added assertion should pass", async () => {
     document.body.innerHTML = `
       <button fs-trigger="click" fs-assert-added="#panel" fs-assert="btn-click">Click</button>
     `;
@@ -38,6 +38,44 @@ describe("Faultsense Agent - Assertion Type: added", () => {
             status: "passed",
           }),
         ],
+        ctx.config
+      )
+    );
+  });
+
+  it("json: added assertion should pass", async () => {
+    // Tear down the HTML-mode agent (beforeEach already initialized one) and
+    // re-init with the JSON spec on a bare DOM.
+    ctx.cleanup();
+    ctx = setupAgent({
+      deferInit: true,
+      config: {
+        spec: [
+          {
+            "fs-target": "#json-btn",
+            "fs-trigger": "click",
+            "fs-assert": "btn-click",
+            "fs-assert-added": "#panel",
+          },
+        ],
+      },
+    });
+    document.body.innerHTML = `<button id="json-btn">Click</button>`;
+    expect(document.querySelectorAll("[fs-trigger],[fs-assert]")).toHaveLength(0); // leak guard
+    ctx.init();
+
+    const button = document.getElementById("json-btn") as HTMLButtonElement;
+    button.addEventListener("click", () => {
+      const panel = document.createElement("div");
+      panel.id = "panel";
+      document.body.appendChild(panel);
+    });
+
+    button.click();
+
+    await vi.waitFor(() =>
+      expect(ctx.sendToCollectorSpy).toHaveBeenCalledWith(
+        [expect.objectContaining({ status: "passed", assertionKey: "btn-click" })],
         ctx.config
       )
     );

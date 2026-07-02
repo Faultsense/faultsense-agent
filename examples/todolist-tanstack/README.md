@@ -13,6 +13,25 @@ npm run dev
 
 Open http://localhost:3000. Interact with the todos and watch the Faultsense panel.
 
+## Deploy
+
+Production build + start:
+
+```bash
+npm run build
+npm start
+```
+
+`npm start` runs `server.mjs`, a minimal Node HTTP wrapper that serves the
+static client assets under `dist/client/` and bridges everything else into
+the TanStack Start fetch handler at `dist/server/server.js`. Reads `$PORT`
+(default 3000).
+
+`railway.toml` and `nixpacks.toml` are checked in for Railway deployment.
+Set the Railway project root directory to
+`packages/agent/examples/todolist-tanstack` and Railway will pick up the
+Nixpacks config automatically.
+
 ## What's Instrumented
 
 | Action | Assertion Key | What It Checks |
@@ -32,7 +51,22 @@ The agent and panel collector are loaded as `<script defer>` tags in the documen
 
 ## Faultsense Scripts
 
-The `public/` directory contains symlinks to `../../dist/` — so the example always uses the latest agent build. Run `npm run build` from the agent repo root to update.
+The `public/` directory holds copies of `faultsense-agent.min.js` (from
+`packages/agent/dist/iife/`) and `faultsense-panel.min.js` (from
+`packages/agent/collectors/panel/dist/iife/`). Refresh them after rebuilding
+the agent:
+
+```bash
+# from packages/agent/ — produce fresh IIFE bundles
+npm run build
+
+# from this directory — copy them into public/
+npm run prepare:public
+```
+
+These files are committed (not symlinks) so the Railway build context, which
+is limited to this example's directory, has everything it needs without
+reaching into the wider monorepo.
 
 ## Things to Try
 

@@ -13,6 +13,13 @@ const isValidConfigBoolean = (v: boolean) => typeof v === "boolean";
 const isValidCollectorURL = (v: string | Function) =>
   (typeof v === "string" && v.length > 0) || typeof v === "function";
 
+const isValidSpec = (v: unknown) =>
+  v === undefined ||
+  (Array.isArray(v) && v.every((e) => e !== null && typeof e === "object"));
+
+const isValidIgnoreHtmlAttrs = (v: unknown) =>
+  v === undefined || typeof v === "boolean";
+
 const configValidator: Record<string, Validator[]> = {
   apiKey: [configValueRequired, isValidConfigString],
   releaseLabel: [configValueRequired, isValidConfigString],
@@ -20,6 +27,8 @@ const configValidator: Record<string, Validator[]> = {
   unloadGracePeriod: [isValidCopnfigNumber],
   collectorURL: [configValueRequired, isValidCollectorURL],
   debug: [isValidConfigBoolean],
+  spec: [isValidSpec],
+  ignoreHtmlAttrs: [isValidIgnoreHtmlAttrs],
 };
 
 export function setConfiguration(

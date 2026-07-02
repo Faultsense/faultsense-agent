@@ -1,4 +1,4 @@
-import { parseTypeValue } from "../../processors/elements";
+import { parseTypeValue } from "../../parsers/shared";
 
 export const CUSTOM_EVENT_PREFIX = "event:";
 

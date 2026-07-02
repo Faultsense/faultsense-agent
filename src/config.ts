@@ -5,6 +5,11 @@ export const defaultConfiguration: Partial<Configuration> = {
   unloadGracePeriod: 2000,
   collectorURL: "//faultsense.com/collector/",
   debug: false,
+  // Explicit undefined: setConfiguration only copies keys present on
+  // defaultConfiguration; if `spec` is absent here a user-supplied
+  // `spec: [...]` would be dropped during merge.
+  spec: undefined,
+  ignoreHtmlAttrs: false,
 };
 
 export const assertionPrefix = {

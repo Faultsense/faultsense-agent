@@ -11,14 +11,37 @@
     the agent resolves data-collector-url.
   -->
   <script src="/collector.js"></script>
-  <script
-    id="fs-agent"
-    src="/faultsense-agent.min.js"
-    data-release-label="htmx-harness"
-    data-api-key="test"
-    data-collector-url="conformance"
-    data-gc-interval="5000"
-  ></script>
+  <% if (typeof useJsonMode !== "undefined" && useJsonMode) { %>
+    <%# JSON mode: load the agent without the auto-init script tag id,
+        then call init() manually with ignoreHtmlAttrs + the hand-crafted
+        spec. The HTML fs-* attrs in this template stay inert. %>
+    <script src="/faultsense-agent.min.js"></script>
+    <script src="/todolist-htmx-spec.js"></script>
+    <script>
+      // Defer init to DOMContentLoaded so the agent's initial mount /
+      // invariant scan sees the fully-parsed body. auto.ts does the same
+      // for HTML-mode auto-init.
+      document.addEventListener("DOMContentLoaded", function () {
+        window.Faultsense.init({
+          apiKey: "test",
+          releaseLabel: "htmx-harness-json",
+          collectorURL: window.Faultsense.collectors.conformance,
+          gcInterval: 5000,
+          ignoreHtmlAttrs: true,
+          spec: window.TODOLIST_HTMX_SPEC,
+        });
+      });
+    </script>
+  <% } else { %>
+    <script
+      id="fs-agent"
+      src="/faultsense-agent.min.js"
+      data-release-label="htmx-harness"
+      data-api-key="test"
+      data-collector-url="conformance"
+      data-gc-interval="5000"
+    ></script>
+  <% } %>
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
 </head>
 <body>

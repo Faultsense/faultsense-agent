@@ -24,8 +24,13 @@ app.use(express.static(path.join(__dirname, "public")));
 let todos = [];
 let nextId = 1;
 
-app.get("/", (_req, res) => {
-  res.render("index", { todos });
+app.get("/", (req, res) => {
+  // `?mode=json` swaps the agent setup to ignore the in-template fs-* attrs
+  // and drive purely from public/todolist-htmx-spec.js. The HTML attrs stay
+  // on the rendered DOM; this exercises ignoreHtmlAttrs end-to-end on a
+  // real app for parity validation. See conformance/drivers/htmx.spec.ts.
+  const useJsonMode = req.query.mode === "json";
+  res.render("index", { todos, useJsonMode });
 });
 
 app.post("/todos", (req, res) => {

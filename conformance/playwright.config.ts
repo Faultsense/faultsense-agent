@@ -79,6 +79,17 @@ export default defineConfig({
       },
     },
     {
+      // Reuses the htmx webServer on port 3400. The driver navigates
+      // each page to `?mode=json`, which the server detects and renders
+      // with the agent loading in ignoreHtmlAttrs mode + the JSON spec.
+      name: "htmx-json",
+      testMatch: "htmx-json.spec.ts",
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: "http://localhost:3400",
+      },
+    },
+    {
       name: "svelte",
       testMatch: "svelte.spec.ts",
       use: {

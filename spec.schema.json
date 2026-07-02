@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://faultsense.com/spec.schema.json",
+  "title": "Faultsense JSON Spec Entry",
+  "description": "A single JSON-spec entry — mirrors the fs-* attribute model 1:1, with an additional fs-target key naming the CSS selector the trigger binds to.",
+  "type": "object",
+  "required": ["fs-target", "fs-assert"],
+  "anyOf": [
+    { "required": ["fs-trigger"] },
+    { "required": ["fs-assert-oob"] },
+    { "required": ["fs-assert-oob-fail"] }
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "fs-trigger": {
+      "type": "string",
+      "description": "Event trigger. Examples: 'click', 'submit', 'mount', 'invariant', 'keydown:Escape', 'event:cart-updated', 'event:cart-updated[detail-matches=type:add]'."
+    },
+    "fs-target": {
+      "type": "string",
+      "description": "CSS selector that resolves to the trigger-bearing element. JSON-only — has no HTML counterpart."
+    },
+    "fs-assert": {
+      "type": "string",
+      "description": "Assertion key. Used by the collector to identify the feature being asserted."
+    },
+    "fs-assert-added": {
+      "type": "string",
+      "description": "Pass when a matching element appears in the DOM."
+    },
+    "fs-assert-removed": {
+      "type": "string",
+      "description": "Pass when a matching element is removed from the DOM."
+    },
+    "fs-assert-updated": {
+      "type": "string",
+      "description": "Pass when a matching element or its subtree mutates."
+    },
+    "fs-assert-visible": {
+      "type": "string",
+      "description": "Pass when a matching element exists and is visible."
+    },
+    "fs-assert-hidden": {
+      "type": "string",
+      "description": "Pass when a matching element exists but is hidden."
+    },
+    "fs-assert-loaded": {
+      "type": "string",
+      "description": "Pass when media (img/video/etc) finishes loading."
+    },
+    "fs-assert-stable": {
+      "type": "string",
+      "description": "Pass when an element is NOT mutated within the timeout window."
+    },
+    "fs-assert-emitted": {
+      "type": "string",
+      "description": "Pass when a matching CustomEvent fires on the document."
+    },
+    "fs-assert-route": {
+      "type": "string",
+      "description": "Pass when the URL matches a route pattern."
+    },
+    "fs-assert-after": {
+      "type": "string",
+      "description": "Pass when a parent assertion (identified by its key) has already passed."
+    },
+    "fs-assert-mpa": {
+      "type": "string",
+      "description": "Persist the assertion across page navigation. Truthy strings enable; omit or 'false' disables."
+    },
+    "fs-assert-timeout": {
+      "type": "string",
+      "description": "Custom SLA timeout in milliseconds. Numeric string."
+    },
+    "fs-assert-mutex": {
+      "type": "string",
+      "description": "Conditional mutex mode: 'type', 'each', 'conditions', or a comma-separated list of condition keys."
+    },
+    "fs-assert-oob": {
+      "type": "string",
+      "description": "Out-of-band: fire this assertion when the named parent assertion passes."
+    },
+    "fs-assert-oob-fail": {
+      "type": "string",
+      "description": "Out-of-band: fire this assertion when the named parent assertion fails."
+    }
+  },
+  "patternProperties": {
+    "^fs-assert-(added|removed|updated|visible|hidden|loaded|stable|emitted|route|after)-[a-z][a-z0-9-]*$": {
+      "type": "string",
+      "description": "Conditional dynamic type: fs-assert-{type}-{conditionKey}. Condition keys are freeform lowercase alphanumeric strings with hyphens."
+    }
+  }
+}

@@ -17,6 +17,28 @@ npm run dev
 
 Log in with `demo` / `demo`.
 
+### Two authoring modes, same demo
+
+The demo runs in either of two equivalent instrumentation modes — the same UI, same panel output, but two different code paths inside the agent:
+
+| URL | Mode | What it shows |
+|---|---|---|
+| `http://localhost:3099/` | HTML attributes (default) | The canonical path — `fs-*` attributes on every interactive element drive the agent. |
+| `http://localhost:3099/?mode=json` | JSON spec | The agent boots with `ignoreHtmlAttrs: true` and loads `public/todolist-htmx-spec.js` instead. The server also **strips every `fs-*` attribute** from rendered HTML — initial pages and HTMX swap fragments — so devtools shows a clean DOM and you can prove the JSON spec is doing the work. |
+
+The `?mode=json` toggle is preserved across login/logout via a small middleware in `server.js` that rewrites `HX-Location` and the form actions. Refresh either page to confirm the panel still fires identical assertions.
+
+Try this side by side to see the strip in action:
+
+```bash
+curl -s http://localhost:3099/todos | grep -oE 'fs-[a-z-]+' | wc -l         # ~90
+curl -s "http://localhost:3099/todos?mode=json" | grep -oE 'fs-[a-z-]+' | wc -l  # ~3 (only EJS comment text)
+```
+
+The JSON spec at `public/todolist-htmx-spec.js` is hand-crafted — nothing auto-translates HTML→JSON. Each entry maps to one fs-instrumented element. Where the HTML version uses per-row dynamic IDs (`#todo-<id>`) or templated values (`[count=<%= todos.length + 1 %>]`), the JSON version uses a generic class selector and drops the templated modifier — same semantics, slightly less precision.
+
+**Caveat:** connectivity triggers (`online`/`offline`) don't fire in `ignoreHtmlAttrs` mode (see `docs/public/agent/configuration.md`). The two `network/offline-banner-*` assertions stay pending in JSON mode; everything else fires.
+
 ## What you're looking at
 
 Every interaction is monitored by a Faultsense assertion. Open the panel in the bottom-right to see them fire green as you interact. 17 assertion keys cover the whole flow — add, toggle, edit, cancel, delete, navigation, invariants, and the activity log.

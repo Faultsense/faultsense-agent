@@ -34,7 +34,7 @@
       <!-- auth/logout: clicking logout should navigate to /login. -->
       <button
         class="logout-btn"
-        hx-post="/logout"
+        hx-post="/logout<%= (typeof useJsonMode !== 'undefined' && useJsonMode) ? '?mode=json' : '' %>"
         data-offline-disable
         fs-assert="auth/logout"
         fs-trigger="click"

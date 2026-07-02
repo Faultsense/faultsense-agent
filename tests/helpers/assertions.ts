@@ -152,7 +152,15 @@ export function setupAgent(options: SetupAgentOptions = {}): AgentTestContext {
       cleanupFn();
       cleanupFn = null;
     }
-    cleanupFn = init({ ...config, ...overrides });
+    // Build the final config in a fresh object, then sync the resolved
+    // shape back onto `config` so ctx.config reflects what the agent
+    // actually saw. setConfiguration mutates its input in place — without
+    // this sync, the non-undefined defaults (e.g. ignoreHtmlAttrs: false)
+    // would appear on the agent's config but not on ctx.config, breaking
+    // toHaveBeenCalledWith equality on the config arg.
+    const finalConfig: any = { ...config, ...overrides };
+    cleanupFn = init(finalConfig);
+    Object.assign(config, finalConfig);
   };
 
   if (!options.deferInit) {

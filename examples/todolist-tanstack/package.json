@@ -3,10 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "22"
+  },
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "start": "node .output/server/index.mjs"
+    "start": "node server.mjs",
+    "prepare:public": "cp ../../dist/iife/faultsense-agent.min.js public/ && cp ../../collectors/panel/dist/iife/faultsense-panel.min.js public/"
   },
   "dependencies": {
     "@tanstack/react-router": "^1.166.0",

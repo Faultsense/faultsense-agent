@@ -1,4 +1,4 @@
-import type { GlobalErrorHandler, Configuration } from "../types";
+import type { GlobalErrorHandler, Configuration, SpecEntry } from "../types";
 export declare function createAssertionManager(config: Configuration): {
     handleEvent: (event: Event) => void;
     handleCustomEvent: (event: Event) => void;
@@ -9,6 +9,7 @@ export declare function createAssertionManager(config: Configuration): {
     processElements: (elements: HTMLElement[], triggers: string[]) => void;
     registerCustomEventElement: (element: HTMLElement) => void;
     customEventRegistry: import("../listeners/custom-events").CustomEventRegistry;
+    specRegistry: import("./spec-registry").SpecRegistry | undefined;
     saveActiveAssertions: () => void;
     clearActiveAssertions: () => void;
     handlePageUnload: () => void;
@@ -16,4 +17,8 @@ export declare function createAssertionManager(config: Configuration): {
     getPendingAssertionCount: () => number;
     setUserContext: (context: Record<string, any> | undefined) => void;
     setUserCohorts: (cohorts: Record<string, string> | undefined) => void;
+    setSpec: (entries: readonly SpecEntry[] | undefined) => void;
+    addSpec: (entries: readonly SpecEntry[]) => void;
+    getSpec: () => readonly SpecEntry[];
+    scanSpecForTriggers: (triggers: string[], scanRoot: Element) => void;
 };

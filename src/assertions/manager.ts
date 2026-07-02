@@ -9,10 +9,11 @@ import type {
   Configuration,
   CompletedAssertion,
   Assertion,
+  SpecEntry,
 } from "../types";
 import { sendToCollector } from "./server";
 import { eventProcessor } from "../processors/events";
-import { createElementProcessor } from "../processors/elements";
+import { createElementProcessor, createAssertions } from "../processors/elements";
 import { mutationHandler } from "../processors/mutations";
 import { documentResolver, elementResolver, immediateResolver } from "../resolvers/dom";
 import { globalErrorResolver } from "../resolvers/error";
@@ -40,6 +41,7 @@ import { routeResolver } from "../resolvers/route";
 import { sequenceResolver } from "../resolvers/sequence";
 import { parseCustomEventTrigger, matchesDetail, isCustomEventTrigger } from "../utils/triggers/custom-events";
 import { createCustomEventRegistry } from "../listeners/custom-events";
+import { createSpecRegistry } from "./spec-registry";
 import { emittedResolver } from "../resolvers/emitted";
 
 // Assertion Manager with pluggable Processors
@@ -48,6 +50,60 @@ export function createAssertionManager(config: Configuration) {
   let assertionCountCallback: ((count: number) => void) | null = null;
   const logger = createLogger(config);
   const customEventRegistry = createCustomEventRegistry();
+  // Spec registry is created lazily — HTML-only customers (no config.spec,
+  // no ignoreHtmlAttrs, no setSpec call) never pay the Map-allocation cost
+  // or pull live references through the JSON discovery code paths.
+  let specRegistry: ReturnType<typeof createSpecRegistry> | undefined;
+  const ensureSpecRegistry = () => (specRegistry ??= createSpecRegistry());
+
+  /**
+   * Build a configured ElementProcessor closed over the registry + config
+   * flag. All four caller sites (handleEvent, handleCustomEvent,
+   * handleMutations, processElements) get the same shape — no positional
+   * undefineds, no need to remember which slot ignoreHtmlAttrs lives in.
+   */
+  const makeProcessor = (
+    triggers: string[],
+    eventMode: boolean = false,
+    event?: Event
+  ) =>
+    createElementProcessor({
+      triggers,
+      eventMode,
+      event,
+      specRegistry,
+      ignoreHtmlAttrs: config.ignoreHtmlAttrs,
+    });
+
+  /**
+   * Apply a spec diff to the document-level custom-event listener pool.
+   * Added events get an ensureListener install. Removed events get torn
+   * down only when no HTML element still references the same name —
+   * cross-source reference counting keeps coexisting HTML + JSON safe.
+   */
+  const applySpecDiff = (diff: { addedEvents: string[]; removedEvents: string[] }): void => {
+    for (const name of diff.addedEvents) {
+      customEventRegistry.ensureListener(name, handleCustomEvent);
+    }
+    for (const name of diff.removedEvents) {
+      if (!customEventRegistry.hasElementsFor(name)) {
+        customEventRegistry.deregisterEventName(name);
+      }
+    }
+  };
+
+  const setSpec = (entries: readonly SpecEntry[] | undefined): void => {
+    const diff = ensureSpecRegistry().setEntries(entries ?? []);
+    applySpecDiff(diff);
+  };
+
+  const addSpec = (entries: readonly SpecEntry[]): void => {
+    const diff = ensureSpecRegistry().addEntries(entries);
+    applySpecDiff(diff);
+  };
+
+  const getSpec = (): readonly SpecEntry[] =>
+    specRegistry ? specRegistry.getEntries() : [];
 
   /**
    * Check if an assertion condition is already met after current event processing
@@ -189,7 +245,7 @@ export function createAssertionManager(config: Configuration) {
       return;
     }
     const triggers = eventTriggerAliases[event.type] || [event.type];
-    const elementProcessor = createElementProcessor(triggers, true, event);
+    const elementProcessor = makeProcessor(triggers, true, event);
     const created = eventProcessor(event, elementProcessor);
     enqueueAssertions(created);
 
@@ -219,8 +275,29 @@ export function createAssertionManager(config: Configuration) {
 
       if (matching.length > 0) {
         const triggers = [...new Set(matching.map(el => el.getAttribute(assertionTriggerAttr)!))];
-        const elementProcessor = createElementProcessor(triggers);
+        // JSON discovery for custom events runs SEPARATELY in Phase 1b via
+        // findCustomEventCandidates — so this processor walks HTML only.
+        // Bypass makeProcessor here to keep that intent explicit (no
+        // specRegistry threading) rather than relying on a comment.
+        const elementProcessor = createElementProcessor({
+          triggers,
+          ignoreHtmlAttrs: config.ignoreHtmlAttrs,
+        });
         enqueueAssertions(elementProcessor(matching));
+      }
+    }
+
+    // Phase 1b: Process JSON-spec entries waiting on this custom event.
+    // findCustomEventCandidates returns pre-resolved (element, metadata)
+    // pairs — drive each directly through createAssertions.
+    if (specRegistry) {
+      const specPairs = specRegistry.findCustomEventCandidates(eventName, event as CustomEvent);
+      if (specPairs.length > 0) {
+        const specAssertions: Assertion[] = [];
+        for (const [element, metadata] of specPairs) {
+          specAssertions.push(...createAssertions(element, metadata));
+        }
+        if (specAssertions.length > 0) enqueueAssertions(specAssertions);
       }
     }
 
@@ -247,7 +324,7 @@ export function createAssertionManager(config: Configuration) {
 
   // Processor for DOM mutations (calls all registered mutation Processors)
   const handleMutations = (mutationsList: MutationRecord[]): void => {
-    const elementProcessor = createElementProcessor(["mount", "invariant"]);
+    const elementProcessor = makeProcessor(["mount", "invariant"]);
     const created = mutationHandler<Assertion>(
       mutationsList,
       elementProcessor,
@@ -268,14 +345,18 @@ export function createAssertionManager(config: Configuration) {
     );
     settle(completed);
 
-    // Register any newly added elements with custom event triggers
-    for (const mutation of mutationsList) {
-      for (const node of Array.from(mutation.addedNodes)) {
-        if (node instanceof HTMLElement) {
-          registerCustomEventElement(node);
-          const descendants = node.querySelectorAll(`[${assertionTriggerAttr}]`);
-          for (const desc of Array.from(descendants) as HTMLElement[]) {
-            registerCustomEventElement(desc);
+    // Register any newly added elements with custom event triggers. Gated by
+    // ignoreHtmlAttrs — when the agent treats HTML attrs as non-authoritative,
+    // it shouldn't pick up newly-rendered fs-trigger="event:*" elements either.
+    if (!config.ignoreHtmlAttrs) {
+      for (const mutation of mutationsList) {
+        for (const node of Array.from(mutation.addedNodes)) {
+          if (node instanceof HTMLElement) {
+            registerCustomEventElement(node);
+            const descendants = node.querySelectorAll(`[${assertionTriggerAttr}]`);
+            for (const desc of Array.from(descendants) as HTMLElement[]) {
+              registerCustomEventElement(desc);
+            }
           }
         }
       }
@@ -344,7 +425,7 @@ export function createAssertionManager(config: Configuration) {
     const passed = toSettle.filter(a => a.status === "passed" && !a.oob);
     const failed = toSettle.filter(a => a.status === "failed" && !a.oob);
     if (passed.length > 0 || failed.length > 0) {
-      const oobAssertions = findAndCreateOobAssertions(passed, failed);
+      const oobAssertions = findAndCreateOobAssertions(passed, failed, specRegistry);
       if (oobAssertions.length > 0) {
         enqueueAssertions(oobAssertions);
         // Try to resolve immediately since the DOM state is already current.
@@ -381,12 +462,33 @@ export function createAssertionManager(config: Configuration) {
     elements: HTMLElement[],
     triggers: string[]
   ): void => {
-    const updatedAssertions = createElementProcessor(triggers)(elements);
+    const updatedAssertions = makeProcessor(triggers)(elements);
     enqueueAssertions(updatedAssertions);
 
     // Check assertions immediately after enqueueing to handle already-loaded elements
     if (updatedAssertions.some(assertion => assertion.type === "loaded")) {
       checkAssertions();
+    }
+  };
+
+  /**
+   * Run JSON-only discovery for the given triggers against scanRoot. The HTML
+   * initial mount scan in init() seeds processElements with elements found via
+   * `document.querySelectorAll([fs-trigger=...])`, which can't find JSON-only
+   * candidates (those elements have no fs-trigger attribute). This method
+   * complements that scan by walking the spec registry directly.
+   */
+  const scanSpecForTriggers = (triggers: string[], scanRoot: Element): void => {
+    if (!specRegistry) return;
+    const pairs = specRegistry.findCandidatesForScan(triggers, scanRoot);
+    if (pairs.length === 0) return;
+    const assertions: Assertion[] = [];
+    for (const [element, metadata] of pairs) {
+      assertions.push(...createAssertions(element, metadata));
+    }
+    if (assertions.length > 0) {
+      enqueueAssertions(assertions);
+      if (assertions.some(a => a.type === "loaded")) checkAssertions();
     }
   };
 
@@ -485,6 +587,7 @@ export function createAssertionManager(config: Configuration) {
     processElements,
     registerCustomEventElement,
     customEventRegistry,
+    specRegistry,
     saveActiveAssertions,
     clearActiveAssertions,
     handlePageUnload,
@@ -492,5 +595,9 @@ export function createAssertionManager(config: Configuration) {
     getPendingAssertionCount,
     setUserContext,
     setUserCohorts,
+    setSpec,
+    addSpec,
+    getSpec,
+    scanSpecForTriggers,
   };
 }

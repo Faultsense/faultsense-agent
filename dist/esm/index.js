@@ -1,6 +1,7 @@
-/*! Faultsense agent (esm/index) v0.5.5 | FSL-1.1-ALv2 | https://faultsense.com */
+/*! Faultsense agent (esm/index) v0.6.0 | FSL-1.1-ALv2 | https://faultsense.com */
 
 // src/types.ts
+var fsAttr = (s) => s;
 var domAssertionTypes = ["added", "removed", "updated", "visible", "hidden", "loaded", "stable"];
 var eventAssertionTypes = ["emitted"];
 var routeAssertionTypes = ["route"];
@@ -13,7 +14,12 @@ var defaultConfiguration = {
   gcInterval: 5e3,
   unloadGracePeriod: 2e3,
   collectorURL: "//faultsense.com/collector/",
-  debug: false
+  debug: false,
+  // Explicit undefined: setConfiguration only copies keys present on
+  // defaultConfiguration; if `spec` is absent here a user-supplied
+  // `spec: [...]` would be dropped during merge.
+  spec: void 0,
+  ignoreHtmlAttrs: false
 };
 var assertionPrefix = {
   details: "fs-",
@@ -197,7 +203,7 @@ function toPayload(assertion, config) {
     condition_key: assertion.conditionKey || "",
     release_label: config.releaseLabel,
     element_snapshot: assertion.elementSnapshot,
-    agent_version: "0.5.5"
+    agent_version: "0.6.0"
   };
   if (assertion.errorContext) {
     payload.error_context = assertion.errorContext;
@@ -553,7 +559,7 @@ function matchesKeyFilter(event, filter) {
   return keyMatch && event.ctrlKey === filter.ctrl && event.shiftKey === filter.shift && event.altKey === filter.alt && event.metaKey === filter.meta;
 }
 
-// src/processors/elements.ts
+// src/parsers/shared.ts
 function stripOuterQuotes(value) {
   if (value.length < 2) return value;
   const first = value[0];
@@ -632,65 +638,7 @@ function parseMutex(value, conditionKey) {
     mutexKeys: value.split(",").map((k) => k.trim())
   };
 }
-function parseDynamicTypes(element) {
-  const prefix = assertionPrefix.types;
-  const types = [];
-  for (const attr of Array.from(element.attributes)) {
-    if (!attr.name.startsWith(prefix)) continue;
-    const suffix = attr.name.slice(prefix.length);
-    for (const domType of allAssertionTypes) {
-      if (suffix.startsWith(`${domType}-`)) {
-        const remaining = suffix.slice(domType.length + 1);
-        if (conditionKeySuffixPattern.test(remaining)) {
-          if (reservedConditionKeys.includes(remaining)) {
-            console.warn(
-              `[Faultsense]: Condition key "${remaining}" conflicts with a reserved name. Avoid using assertion type names as condition keys.`,
-              { element }
-            );
-          }
-          const { selector, modifiers } = parseTypeValue(attr.value);
-          types.push({
-            type: domType,
-            value: selector,
-            modifiers,
-            conditionKey: remaining
-          });
-        }
-        break;
-      }
-    }
-  }
-  return types;
-}
-function createElementProcessor(triggers, eventMode = false, event) {
-  return function(targets) {
-    return processElements(targets, triggers, eventMode, event);
-  };
-}
-function processElements(targets, triggers, eventMode = false, event) {
-  const allAssertions = [];
-  for (const target of targets) {
-    const elementsToProcess = [];
-    if (isProcessableElement(target, triggers, event)) {
-      elementsToProcess.push(target);
-    } else if (!eventMode) {
-      const elementsWithTriggers = target.querySelectorAll(`[${assertionTriggerAttr}]`);
-      for (const element of Array.from(elementsWithTriggers)) {
-        if (isProcessableElement(element, triggers, event)) {
-          elementsToProcess.push(element);
-        }
-      }
-    }
-    for (const element of elementsToProcess) {
-      const assertionMetadata = parseAssertions(element);
-      const newAssertions = createAssertions(element, assertionMetadata);
-      allAssertions.push(...newAssertions);
-    }
-  }
-  return allAssertions;
-}
-function isProcessableElement(element, triggers, event) {
-  const raw = element.getAttribute(assertionTriggerAttr);
+function isProcessableTrigger(raw, triggers, event) {
   if (!raw) return false;
   const { base, filter } = parseTrigger(raw);
   if (base === "event") {
@@ -702,46 +650,114 @@ function isProcessableElement(element, triggers, event) {
   }
   return true;
 }
-function parseAssertions(element) {
-  let assertionMetaData = {
+function extractMetadata(entries) {
+  const map = /* @__PURE__ */ new Map();
+  for (const [k, v] of entries) {
+    map.set(k, v);
+  }
+  const metadata = {
     details: {},
     types: [],
     modifiers: {}
   };
-  const processDetails = (keys) => {
-    for (const key of keys) {
-      const value = element.getAttribute(`${assertionPrefix.details}${key}`);
-      if (value !== null) {
-        assertionMetaData.details[key] = value;
+  for (const key of supportedAssertions.details) {
+    const v = map.get(`${assertionPrefix.details}${key}`);
+    if (v !== void 0) metadata.details[key] = v;
+  }
+  for (const key of supportedAssertions.types) {
+    const v = map.get(`${assertionPrefix.types}${key}`);
+    if (v !== void 0) {
+      const parsed = parseTypeValue(v);
+      metadata.types.push({
+        type: key,
+        value: parsed.selector,
+        modifiers: Object.keys(parsed.modifiers).length > 0 ? parsed.modifiers : void 0
+      });
+    }
+  }
+  for (const key of supportedAssertions.modifiers) {
+    const v = map.get(`${assertionPrefix.modifiers}${key}`);
+    if (v !== void 0) metadata.modifiers[key] = v;
+  }
+  metadata.types.push(...extractDynamicTypes(map));
+  return metadata;
+}
+function extractDynamicTypes(map) {
+  const prefix = assertionPrefix.types;
+  const types = [];
+  for (const [key, value] of map) {
+    if (!key.startsWith(prefix)) continue;
+    const suffix = key.slice(prefix.length);
+    for (const domType of allAssertionTypes) {
+      if (suffix.startsWith(`${domType}-`)) {
+        const remaining = suffix.slice(domType.length + 1);
+        if (conditionKeySuffixPattern.test(remaining)) {
+          const parsed = parseTypeValue(value);
+          types.push({
+            type: domType,
+            value: parsed.selector,
+            modifiers: parsed.modifiers,
+            conditionKey: remaining
+          });
+        }
+        break;
       }
     }
+  }
+  return types;
+}
+
+// src/parsers/html.ts
+function isProcessableElement(element, triggers, event) {
+  return isProcessableTrigger(
+    element.getAttribute(assertionTriggerAttr),
+    triggers,
+    event
+  );
+}
+function parseElementAssertions(element) {
+  const entries = [];
+  for (const attr of Array.from(element.attributes)) {
+    entries.push([attr.name, attr.value]);
+  }
+  return extractMetadata(entries);
+}
+
+// src/processors/elements.ts
+function createElementProcessor(opts) {
+  return function(targets) {
+    return processElements(targets, opts);
   };
-  const processTypes = (keys) => {
-    for (const key of keys) {
-      const value = element.getAttribute(`${assertionPrefix.types}${key}`);
-      if (value !== null) {
-        const parsed = parseTypeValue(value);
-        assertionMetaData.types.push({
-          type: key,
-          value: parsed.selector,
-          modifiers: Object.keys(parsed.modifiers).length > 0 ? parsed.modifiers : void 0
-        });
+}
+function processElements(targets, opts) {
+  const { triggers, eventMode = false, event, specRegistry, ignoreHtmlAttrs = false } = opts;
+  const allAssertions = [];
+  for (const target of targets) {
+    if (!ignoreHtmlAttrs) {
+      const elementsToProcess = [];
+      if (isProcessableElement(target, triggers, event)) {
+        elementsToProcess.push(target);
+      } else if (!eventMode) {
+        const elementsWithTriggers = target.querySelectorAll(`[${assertionTriggerAttr}]`);
+        for (const element of Array.from(elementsWithTriggers)) {
+          if (isProcessableElement(element, triggers, event)) {
+            elementsToProcess.push(element);
+          }
+        }
+      }
+      for (const element of elementsToProcess) {
+        const metadata = parseElementAssertions(element);
+        allAssertions.push(...createAssertions(element, metadata));
       }
     }
-  };
-  const processModifiers = (keys) => {
-    for (const key of keys) {
-      const value = element.getAttribute(`${assertionPrefix.modifiers}${key}`);
-      if (value !== null) {
-        assertionMetaData.modifiers[key] = value;
+    if (specRegistry) {
+      const pairs = eventMode ? specRegistry.findCandidatesForEvent(triggers, target, event) : specRegistry.findCandidatesForScan(triggers, target);
+      for (const [element, metadata] of pairs) {
+        allAssertions.push(...createAssertions(element, metadata));
       }
     }
-  };
-  processDetails(supportedAssertions.details);
-  processTypes(supportedAssertions.types);
-  processModifiers(supportedAssertions.modifiers);
-  assertionMetaData.types.push(...parseDynamicTypes(element));
-  return assertionMetaData;
+  }
+  return allAssertions;
 }
 function isValidAssertionMetadata(assertionMetadata, element) {
   const details = { element };
@@ -761,6 +777,14 @@ function isValidAssertionMetadata(assertionMetadata, element) {
 function createAssertions(element, metadata) {
   if (!isValidAssertionMetadata(metadata, element)) {
     return [];
+  }
+  for (const typeEntry of metadata.types) {
+    if (typeEntry.conditionKey && reservedConditionKeys.includes(typeEntry.conditionKey)) {
+      console.warn(
+        `[Faultsense]: Condition key "${typeEntry.conditionKey}" conflicts with a reserved name. Avoid using assertion type names as condition keys.`,
+        { element }
+      );
+    }
   }
   return metadata.types.filter((typeEntry) => {
     if (typeEntry.type === "route") {
@@ -1107,6 +1131,57 @@ var propertyResolver = (assertions, _config) => {
   }, []);
 };
 
+// src/parsers/json.ts
+function isProcessableSpecEntry(entry, triggers, event) {
+  return isProcessableTrigger(entry["fs-trigger"], triggers, event);
+}
+function parseSpecAssertions(entry) {
+  const pairs = [];
+  for (const [k, v] of Object.entries(entry)) {
+    if (typeof v === "string") pairs.push([k, v]);
+  }
+  return extractMetadata(pairs);
+}
+function resolveTargetForEvent(entry, target) {
+  const selector = entry["fs-target"];
+  if (!selector) {
+    console.warn("[Faultsense]: JSON spec entry missing 'fs-target'.", entry);
+    return null;
+  }
+  try {
+    return target.matches(selector) ? target : null;
+  } catch {
+    console.warn(
+      `[Faultsense]: Invalid CSS selector in fs-target: "${selector}".`,
+      entry
+    );
+    return null;
+  }
+}
+function resolveTargetsForScan(entry, scanRoot) {
+  const selector = entry["fs-target"];
+  if (!selector) {
+    console.warn("[Faultsense]: JSON spec entry missing 'fs-target'.", entry);
+    return [];
+  }
+  const matches = [];
+  try {
+    if (scanRoot.matches(selector)) {
+      matches.push(scanRoot);
+    }
+    for (const el of Array.from(scanRoot.querySelectorAll(selector))) {
+      matches.push(el);
+    }
+  } catch {
+    console.warn(
+      `[Faultsense]: Invalid CSS selector in fs-target: "${selector}".`,
+      entry
+    );
+    return [];
+  }
+  return matches;
+}
+
 // src/processors/oob.ts
 function findOobByAttr(attr, triggerName, parentAssertions) {
   if (parentAssertions.length === 0) return [];
@@ -1120,6 +1195,7 @@ function findOobByAttr(attr, triggerName, parentAssertions) {
     if (!attrValue) continue;
     const keys = attrValue.split(",").map((k) => k.trim());
     if (!keys.some((k) => parentKeys.has(k))) continue;
+    const elementSnapshot = el.outerHTML;
     for (const type of domAssertions) {
       const typeAttrName = `${assertionPrefix.types}${type}`;
       const typeAttrValue = el.getAttribute(typeAttrName);
@@ -1129,7 +1205,7 @@ function findOobByAttr(attr, triggerName, parentAssertions) {
       const targetSelector = selector || ensureSelector(el);
       assertions.push({
         assertionKey,
-        elementSnapshot: el.outerHTML,
+        elementSnapshot,
         mpa_mode: false,
         trigger: triggerName,
         timeout: Number(el.getAttribute(`${assertionPrefix.modifiers}timeout`)) || 0,
@@ -1143,11 +1219,53 @@ function findOobByAttr(attr, triggerName, parentAssertions) {
   }
   return assertions;
 }
-function findAndCreateOobAssertions(passedAssertions, failedAssertions = []) {
-  return [
+function findOobBySpecEntries(attrName, triggerName, parentAssertions, specRegistry) {
+  if (parentAssertions.length === 0) return [];
+  const parentKeys = new Set(parentAssertions.map((a) => a.assertionKey));
+  const matchingEntries = specRegistry.findOobEntriesForParents(attrName, parentKeys);
+  if (matchingEntries.length === 0) return [];
+  const assertions = [];
+  for (const entry of matchingEntries) {
+    const assertionKey = entry["fs-assert"];
+    if (!assertionKey) continue;
+    const targets = resolveTargetsForScan(entry, document.body);
+    if (targets.length === 0) continue;
+    const timeout = Number(entry[fsAttr(`fs-assert-timeout`)]) || 0;
+    for (const target of targets) {
+      const elementSnapshot = target.outerHTML;
+      for (const type of domAssertions) {
+        const typeAttrValue = entry[fsAttr(`fs-assert-${type}`)];
+        if (!typeAttrValue) continue;
+        const { selector, modifiers } = parseTypeValue(typeAttrValue);
+        const resolvedMods = resolveInlineModifiers(modifiers);
+        const targetSelector = selector || ensureSelector(target);
+        assertions.push({
+          assertionKey,
+          elementSnapshot,
+          mpa_mode: false,
+          trigger: triggerName,
+          timeout,
+          startTime: Date.now(),
+          type,
+          typeValue: targetSelector,
+          modifiers: resolvedMods,
+          oob: true
+        });
+      }
+    }
+  }
+  return assertions;
+}
+function findAndCreateOobAssertions(passedAssertions, failedAssertions = [], specRegistry) {
+  const out = [
     ...findOobByAttr(oobAttr, "oob", passedAssertions),
     ...findOobByAttr(oobFailAttr, "oob-fail", failedAssertions)
   ];
+  if (specRegistry) {
+    out.push(...findOobBySpecEntries("fs-assert-oob", "oob", passedAssertions, specRegistry));
+    out.push(...findOobBySpecEntries("fs-assert-oob-fail", "oob-fail", failedAssertions, specRegistry));
+  }
+  return out;
 }
 
 // src/resolvers/sequence.ts
@@ -1236,6 +1354,18 @@ function createCustomEventRegistry() {
   function isRegistered(eventName) {
     return listeners.has(eventName);
   }
+  function hasElementsFor(eventName) {
+    const set = elements.get(eventName);
+    return set !== void 0 && set.size > 0;
+  }
+  function deregisterEventName(eventName) {
+    const handler = listeners.get(eventName);
+    if (handler) {
+      document.removeEventListener(eventName, handler);
+      listeners.delete(eventName);
+    }
+    elements.delete(eventName);
+  }
   function deregisterAll() {
     for (const [eventName, handler] of listeners) {
       document.removeEventListener(eventName, handler);
@@ -1249,7 +1379,220 @@ function createCustomEventRegistry() {
     deregisterElement,
     getElements,
     isRegistered,
+    hasElementsFor,
+    deregisterEventName,
     deregisterAll
+  };
+}
+
+// src/assertions/spec-registry.ts
+function triggerIndexKey(raw) {
+  return parseTrigger(raw).base;
+}
+function createSpecRegistry() {
+  let entries = [];
+  const entriesByTrigger = /* @__PURE__ */ new Map();
+  const unionSelectorByTrigger = /* @__PURE__ */ new Map();
+  const entriesByEventName = /* @__PURE__ */ new Map();
+  const entriesByOobKey = /* @__PURE__ */ new Map();
+  const entriesByOobFailKey = /* @__PURE__ */ new Map();
+  function pushIndexed(map, key, entry) {
+    const bucket = map.get(key);
+    if (bucket) {
+      bucket.push(entry);
+    } else {
+      map.set(key, [entry]);
+    }
+  }
+  function indexOobAttr(map, attr, entry) {
+    const value = entry[attr];
+    if (!value) return;
+    for (const key of value.split(",")) {
+      const trimmed = key.trim();
+      if (trimmed) pushIndexed(map, trimmed, entry);
+    }
+  }
+  function indexEntry(entry) {
+    const raw = entry["fs-trigger"];
+    if (raw) {
+      pushIndexed(entriesByTrigger, triggerIndexKey(raw), entry);
+      if (isCustomEventTrigger(raw)) {
+        const parsed = parseCustomEventTrigger(raw);
+        pushIndexed(entriesByEventName, parsed.eventName, entry);
+      }
+    }
+    indexOobAttr(entriesByOobKey, "fs-assert-oob", entry);
+    indexOobAttr(entriesByOobFailKey, "fs-assert-oob-fail", entry);
+  }
+  function rebuildUnionSelectors() {
+    unionSelectorByTrigger.clear();
+    for (const [trigger, bucket] of entriesByTrigger) {
+      if (trigger === "event") continue;
+      const selectors = /* @__PURE__ */ new Set();
+      for (const entry of bucket) {
+        const sel = entry["fs-target"];
+        if (sel) selectors.add(sel);
+      }
+      if (selectors.size > 0) {
+        unionSelectorByTrigger.set(trigger, Array.from(selectors).join(", "));
+      }
+    }
+  }
+  function diffAdded(prev, next) {
+    const out = [];
+    for (const n of next) if (!prev.has(n)) out.push(n);
+    return out;
+  }
+  function diffRemoved(prev, next) {
+    const out = [];
+    for (const n of prev) if (!next.has(n)) out.push(n);
+    return out;
+  }
+  function setEntries(next) {
+    const before = new Set(entriesByEventName.keys());
+    entries = [...next];
+    entriesByTrigger.clear();
+    entriesByEventName.clear();
+    entriesByOobKey.clear();
+    entriesByOobFailKey.clear();
+    for (const entry of entries) indexEntry(entry);
+    rebuildUnionSelectors();
+    return {
+      addedEvents: diffAdded(before, entriesByEventName.keys()),
+      removedEvents: diffRemoved(before, new Set(entriesByEventName.keys()))
+    };
+  }
+  function addEntries(next) {
+    const before = new Set(entriesByEventName.keys());
+    for (const entry of next) {
+      entries.push(entry);
+      indexEntry(entry);
+    }
+    rebuildUnionSelectors();
+    return {
+      addedEvents: diffAdded(before, entriesByEventName.keys()),
+      // Append never removes.
+      removedEvents: []
+    };
+  }
+  function getEntries() {
+    return entries;
+  }
+  function findCandidatesForEvent(triggers, target, event) {
+    const pairs = [];
+    const seen = /* @__PURE__ */ new WeakSet();
+    for (const trigger of triggers) {
+      const bucket = entriesByTrigger.get(triggerIndexKey(trigger));
+      if (!bucket) continue;
+      for (const entry of bucket) {
+        if (seen.has(entry)) continue;
+        if (!isProcessableSpecEntry(entry, triggers, event)) continue;
+        const matched = resolveTargetForEvent(entry, target);
+        if (!matched) continue;
+        seen.add(entry);
+        pairs.push([matched, parseSpecAssertions(entry)]);
+      }
+    }
+    return pairs;
+  }
+  function findCandidatesForScan(triggers, scanRoot) {
+    const pairs = [];
+    for (const trigger of triggers) {
+      const base = triggerIndexKey(trigger);
+      if (base === "event") continue;
+      const bucket = entriesByTrigger.get(base);
+      if (!bucket || bucket.length === 0) continue;
+      const unionSelector = unionSelectorByTrigger.get(base);
+      if (!unionSelector) continue;
+      let candidateElements;
+      try {
+        candidateElements = Array.from(
+          scanRoot.querySelectorAll(unionSelector)
+        );
+        if (scanRoot.matches(unionSelector)) {
+          candidateElements.unshift(scanRoot);
+        }
+      } catch {
+        candidateElements = [];
+        for (const entry of bucket) {
+          candidateElements.push(...resolveTargetsForScan(entry, scanRoot));
+        }
+      }
+      if (bucket.length === 1) {
+        const onlyEntry = bucket[0];
+        if (onlyEntry["fs-target"]) {
+          for (const el of candidateElements) {
+            pairs.push([el, parseSpecAssertions(onlyEntry)]);
+          }
+        }
+        continue;
+      }
+      for (const el of candidateElements) {
+        for (const entry of bucket) {
+          const sel = entry["fs-target"];
+          if (!sel) continue;
+          try {
+            if (el.matches(sel)) {
+              pairs.push([el, parseSpecAssertions(entry)]);
+            }
+          } catch {
+          }
+        }
+      }
+    }
+    return pairs;
+  }
+  function findCustomEventCandidates(eventName, event) {
+    const pairs = [];
+    const bucket = entriesByEventName.get(eventName);
+    if (!bucket) return pairs;
+    for (const entry of bucket) {
+      const raw = entry["fs-trigger"];
+      if (!raw || !raw.startsWith(CUSTOM_EVENT_PREFIX)) continue;
+      const parsed = parseCustomEventTrigger(raw);
+      if (parsed.eventName !== eventName) continue;
+      if (parsed.detailMatches && !matchesDetail(event, parsed.detailMatches)) continue;
+      const targets = resolveTargetsForScan(entry, document.body);
+      const metadata = parseSpecAssertions(entry);
+      for (const target of targets) {
+        pairs.push([target, metadata]);
+      }
+    }
+    return pairs;
+  }
+  function findOobEntriesForParents(attr, parentKeys) {
+    if (parentKeys.size === 0) return [];
+    const map = attr === "fs-assert-oob" ? entriesByOobKey : entriesByOobFailKey;
+    const out = [];
+    const seen = /* @__PURE__ */ new WeakSet();
+    for (const key of parentKeys) {
+      const bucket = map.get(key);
+      if (!bucket) continue;
+      for (const entry of bucket) {
+        if (seen.has(entry)) continue;
+        seen.add(entry);
+        out.push(entry);
+      }
+    }
+    return out;
+  }
+  function clear() {
+    entries = [];
+    entriesByTrigger.clear();
+    unionSelectorByTrigger.clear();
+    entriesByEventName.clear();
+    entriesByOobKey.clear();
+    entriesByOobFailKey.clear();
+  }
+  return {
+    setEntries,
+    addEntries,
+    getEntries,
+    findCandidatesForEvent,
+    findCandidatesForScan,
+    findCustomEventCandidates,
+    findOobEntriesForParents,
+    clear
   };
 }
 
@@ -1304,6 +1647,34 @@ function createAssertionManager(config) {
   let assertionCountCallback = null;
   const logger = createLogger(config);
   const customEventRegistry = createCustomEventRegistry();
+  let specRegistry;
+  const ensureSpecRegistry = () => specRegistry ??= createSpecRegistry();
+  const makeProcessor = (triggers, eventMode = false, event) => createElementProcessor({
+    triggers,
+    eventMode,
+    event,
+    specRegistry,
+    ignoreHtmlAttrs: config.ignoreHtmlAttrs
+  });
+  const applySpecDiff = (diff) => {
+    for (const name of diff.addedEvents) {
+      customEventRegistry.ensureListener(name, handleCustomEvent);
+    }
+    for (const name of diff.removedEvents) {
+      if (!customEventRegistry.hasElementsFor(name)) {
+        customEventRegistry.deregisterEventName(name);
+      }
+    }
+  };
+  const setSpec = (entries) => {
+    const diff = ensureSpecRegistry().setEntries(entries ?? []);
+    applySpecDiff(diff);
+  };
+  const addSpec = (entries) => {
+    const diff = ensureSpecRegistry().addEntries(entries);
+    applySpecDiff(diff);
+  };
+  const getSpec = () => specRegistry ? specRegistry.getEntries() : [];
   const checkImmediateResolved = (assertion) => {
     Promise.resolve().then(() => {
       if (isAssertionPending(assertion)) {
@@ -1388,7 +1759,7 @@ function createAssertionManager(config) {
       return;
     }
     const triggers = eventTriggerAliases[event.type] || [event.type];
-    const elementProcessor = createElementProcessor(triggers, true, event);
+    const elementProcessor = makeProcessor(triggers, true, event);
     const created = eventProcessor(event, elementProcessor);
     enqueueAssertions(created);
     const completed = eventResolver(
@@ -1413,8 +1784,21 @@ function createAssertionManager(config) {
       }
       if (matching.length > 0) {
         const triggers = [...new Set(matching.map((el) => el.getAttribute(assertionTriggerAttr)))];
-        const elementProcessor = createElementProcessor(triggers);
+        const elementProcessor = createElementProcessor({
+          triggers,
+          ignoreHtmlAttrs: config.ignoreHtmlAttrs
+        });
         enqueueAssertions(elementProcessor(matching));
+      }
+    }
+    if (specRegistry) {
+      const specPairs = specRegistry.findCustomEventCandidates(eventName, event);
+      if (specPairs.length > 0) {
+        const specAssertions = [];
+        for (const [element, metadata] of specPairs) {
+          specAssertions.push(...createAssertions(element, metadata));
+        }
+        if (specAssertions.length > 0) enqueueAssertions(specAssertions);
       }
     }
     const pendingEmitted = activeAssertions.filter(
@@ -1432,7 +1816,7 @@ function createAssertionManager(config) {
     customEventRegistry.registerElement(eventName, element, handleCustomEvent);
   };
   const handleMutations = (mutationsList) => {
-    const elementProcessor = createElementProcessor(["mount", "invariant"]);
+    const elementProcessor = makeProcessor(["mount", "invariant"]);
     const created = mutationHandler(
       mutationsList,
       elementProcessor,
@@ -1448,13 +1832,15 @@ function createAssertionManager(config) {
       getPendingDomAssertions(activeAssertions)
     );
     settle(completed);
-    for (const mutation of mutationsList) {
-      for (const node of Array.from(mutation.addedNodes)) {
-        if (node instanceof HTMLElement) {
-          registerCustomEventElement(node);
-          const descendants = node.querySelectorAll(`[${assertionTriggerAttr}]`);
-          for (const desc of Array.from(descendants)) {
-            registerCustomEventElement(desc);
+    if (!config.ignoreHtmlAttrs) {
+      for (const mutation of mutationsList) {
+        for (const node of Array.from(mutation.addedNodes)) {
+          if (node instanceof HTMLElement) {
+            registerCustomEventElement(node);
+            const descendants = node.querySelectorAll(`[${assertionTriggerAttr}]`);
+            for (const desc of Array.from(descendants)) {
+              registerCustomEventElement(desc);
+            }
           }
         }
       }
@@ -1502,7 +1888,7 @@ function createAssertionManager(config) {
     const passed = toSettle.filter((a) => a.status === "passed" && !a.oob);
     const failed = toSettle.filter((a) => a.status === "failed" && !a.oob);
     if (passed.length > 0 || failed.length > 0) {
-      const oobAssertions = findAndCreateOobAssertions(passed, failed);
+      const oobAssertions = findAndCreateOobAssertions(passed, failed, specRegistry);
       if (oobAssertions.length > 0) {
         enqueueAssertions(oobAssertions);
         const oobKeys = new Set(oobAssertions.map((a) => a.assertionKey));
@@ -1527,10 +1913,23 @@ function createAssertionManager(config) {
     }
   });
   const processElements2 = (elements, triggers) => {
-    const updatedAssertions = createElementProcessor(triggers)(elements);
+    const updatedAssertions = makeProcessor(triggers)(elements);
     enqueueAssertions(updatedAssertions);
     if (updatedAssertions.some((assertion) => assertion.type === "loaded")) {
       checkAssertions();
+    }
+  };
+  const scanSpecForTriggers = (triggers, scanRoot) => {
+    if (!specRegistry) return;
+    const pairs = specRegistry.findCandidatesForScan(triggers, scanRoot);
+    if (pairs.length === 0) return;
+    const assertions = [];
+    for (const [element, metadata] of pairs) {
+      assertions.push(...createAssertions(element, metadata));
+    }
+    if (assertions.length > 0) {
+      enqueueAssertions(assertions);
+      if (assertions.some((a) => a.type === "loaded")) checkAssertions();
     }
   };
   const saveActiveAssertions = () => {
@@ -1602,13 +2001,18 @@ function createAssertionManager(config) {
     processElements: processElements2,
     registerCustomEventElement,
     customEventRegistry,
+    specRegistry,
     saveActiveAssertions,
     clearActiveAssertions,
     handlePageUnload,
     setAssertionCountCallback,
     getPendingAssertionCount,
     setUserContext,
-    setUserCohorts
+    setUserCohorts,
+    setSpec,
+    addSpec,
+    getSpec,
+    scanSpecForTriggers
   };
 }
 
@@ -1674,13 +2078,17 @@ var isValidConfigString = (v) => typeof v === "string" && v.length > 0;
 var isValidCopnfigNumber = (v) => typeof v === "number" && v > 0;
 var isValidConfigBoolean = (v) => typeof v === "boolean";
 var isValidCollectorURL = (v) => typeof v === "string" && v.length > 0 || typeof v === "function";
+var isValidSpec = (v) => v === void 0 || Array.isArray(v) && v.every((e) => e !== null && typeof e === "object");
+var isValidIgnoreHtmlAttrs = (v) => v === void 0 || typeof v === "boolean";
 var configValidator = {
   apiKey: [configValueRequired, isValidConfigString],
   releaseLabel: [configValueRequired, isValidConfigString],
   gcInterval: [isValidCopnfigNumber],
   unloadGracePeriod: [isValidCopnfigNumber],
   collectorURL: [configValueRequired, isValidCollectorURL],
-  debug: [isValidConfigBoolean]
+  debug: [isValidConfigBoolean],
+  spec: [isValidSpec],
+  ignoreHtmlAttrs: [isValidIgnoreHtmlAttrs]
 };
 function setConfiguration(config) {
   return Object.keys(defaultConfiguration).reduce((acc, key) => {
@@ -1715,7 +2123,7 @@ var cleanupHooks = [];
 function registerCleanupHook(fn) {
   cleanupHooks.push(fn);
 }
-var version = "0.5.5";
+var version = "0.6.0";
 function init(initialConfig) {
   let observer = null;
   const config = setConfiguration(initialConfig);
@@ -1730,6 +2138,9 @@ function init(initialConfig) {
     };
   }
   const assertionManager = createAssertionManager(config);
+  if (config.spec) {
+    assertionManager.setSpec(config.spec);
+  }
   setResolverDebugLogger(logger);
   interceptErrors(assertionManager.handleGlobalError);
   interceptNavigation(assertionManager.handleNavigation);
@@ -1765,26 +2176,37 @@ function init(initialConfig) {
     attributes: true,
     characterData: true
   });
-  const elements = document.querySelectorAll(
-    `[${assertionTriggerAttr}="mount"], [${assertionTriggerAttr}="load"], [${assertionTriggerAttr}="invariant"]`
+  if (!config.ignoreHtmlAttrs) {
+    const elements = document.querySelectorAll(
+      `[${assertionTriggerAttr}="mount"], [${assertionTriggerAttr}="load"], [${assertionTriggerAttr}="invariant"]`
+    );
+    assertionManager.processElements(Array.from(elements), [
+      "mount",
+      "load",
+      "invariant"
+    ]);
+  }
+  assertionManager.scanSpecForTriggers(
+    ["mount", "load", "invariant"],
+    document.body
   );
-  assertionManager.processElements(Array.from(elements), [
-    "mount",
-    "load",
-    "invariant"
-  ]);
   if (!navigator.onLine) {
     handleOffline();
   }
-  const customEventElements = document.querySelectorAll(
-    `[${assertionTriggerAttr}^="event:"]`
-  );
-  for (const el of Array.from(customEventElements)) {
-    assertionManager.registerCustomEventElement(el);
+  if (!config.ignoreHtmlAttrs) {
+    const customEventElements = document.querySelectorAll(
+      `[${assertionTriggerAttr}^="event:"]`
+    );
+    for (const el of Array.from(customEventElements)) {
+      assertionManager.registerCustomEventElement(el);
+    }
   }
   window.Faultsense = window.Faultsense || {};
   window.Faultsense.setUserContext = assertionManager.setUserContext;
   window.Faultsense.setUserCohorts = assertionManager.setUserCohorts;
+  window.Faultsense.setSpec = assertionManager.setSpec;
+  window.Faultsense.addSpec = assertionManager.addSpec;
+  window.Faultsense.getSpec = assertionManager.getSpec;
   assertionManager.checkAssertions();
   return () => {
     assertionManager.clearActiveAssertions();

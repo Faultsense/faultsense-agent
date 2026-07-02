@@ -1,38 +1,25 @@
 import {
-  supportedAssertions,
-  assertionPrefix,
   assertionTriggerAttr,
-  conditionKeySuffixPattern,
-  reservedConditionKeys,
-  inlineModifiers,
-  supportedModifiersByType,
   invertedResolutionTypes,
+  reservedConditionKeys,
+  supportedModifiersByType,
   domAssertions,
 } from "../config";
 import { parseRoutePattern, validateRoutePattern } from "../resolvers/route";
 import { ensureSelector } from "../utils/elements";
-import { parseTrigger } from "../utils/triggers";
-import { parseKeyFilter, matchesKeyFilter } from "../utils/triggers/keyboard";
 import {
-  allAssertionTypes,
   type Assertion,
-  type AssertionModiferValue,
   type AssertionType,
   type ElementProcessor,
 } from "../types";
-
-interface AssertionTypeEntry {
-  type: string;
-  value: string;
-  modifiers?: Record<string, string>;
-  conditionKey?: string;
-}
-
-interface ElementAssertionMetadata {
-  details: Record<string, string>;
-  types: AssertionTypeEntry[];
-  modifiers: Record<string, AssertionModiferValue>;
-}
+import { isProcessableElement, parseElementAssertions } from "../parsers/html";
+import {
+  parseMutex,
+  resolveInlineModifiers,
+  type AssertionTypeEntry,
+  type ElementAssertionMetadata,
+} from "../parsers/shared";
+import type { SpecRegistry } from "../assertions/spec-registry";
 
 export class AssertionError extends Error {
   public details: Record<string, any>;
@@ -45,299 +32,72 @@ export class AssertionError extends Error {
 }
 
 /**
- * Strip matching outer single or double quotes from a modifier value.
- * CSS attribute selectors support `[attr='value']` and `[attr="value"]`
- * (per https://www.w3.org/TR/selectors-4/#attribute-selectors), and
- * frameworks that build selectors via template literals (Vue, React,
- * Svelte) naturally emit the quoted form. Without this step the parser
- * preserves the quotes and every downstream matcher compares against
- * `'value'` instead of `value`, producing a silent no-match.
+ * Per-invocation context for processElements. Bundled as an options object
+ * so the call site stays readable as the agent grows new cross-cutting
+ * concerns (currently: specRegistry, ignoreHtmlAttrs).
  */
-function stripOuterQuotes(value: string): string {
-  if (value.length < 2) return value;
-  const first = value[0];
-  const last = value[value.length - 1];
-  if ((first === '"' || first === "'") && first === last) {
-    return value.slice(1, -1);
-  }
-  return value;
+export interface ProcessOptions {
+  triggers: string[];
+  eventMode?: boolean;
+  event?: Event;
+  /** JSON spec source, when configured. Undefined for HTML-only agents. */
+  specRegistry?: SpecRegistry;
+  /** When true, HTML-attribute discovery is skipped — JSON-only mode. */
+  ignoreHtmlAttrs?: boolean;
 }
 
-/**
- * Parse a type attribute value into a selector and inline modifiers.
- * Format: "selector[key=value][key=value]..."
- * Handles nested brackets in values (e.g., regex character classes like [a-z])
- */
-export function parseTypeValue(raw: string): { selector: string; modifiers: Record<string, string> } {
-  const firstBracket = raw.indexOf('[');
-  if (firstBracket === -1) {
-    return { selector: raw, modifiers: {} };
-  }
-
-  const selector = raw.slice(0, firstBracket);
-  const modifiers: Record<string, string> = {};
-
-  // Walk the string character by character to handle nested brackets
-  let i = firstBracket;
-  while (i < raw.length) {
-    if (raw[i] !== '[') { i++; continue; }
-
-    // Find the key (up to '=')
-    const eqIndex = raw.indexOf('=', i + 1);
-    if (eqIndex === -1) break;
-    const key = raw.slice(i + 1, eqIndex);
-
-    // Find the matching closing bracket, tracking nesting depth
-    let depth = 1;
-    let j = eqIndex + 1;
-    while (j < raw.length && depth > 0) {
-      if (raw[j] === '[') depth++;
-      else if (raw[j] === ']') depth--;
-      if (depth > 0) j++;
-    }
-
-    if (depth === 0) {
-      modifiers[key] = stripOuterQuotes(raw.slice(eqIndex + 1, j));
-      i = j + 1;
-    } else {
-      break;
-    }
-  }
-
-  return { selector, modifiers };
-}
-
-/**
- * Resolve inline modifiers to the format resolvers expect.
- * Reserved keys (text-matches, classlist) pass through.
- * Unreserved keys become attrs-match entries.
- */
-export function resolveInlineModifiers(
-  inlineMods: Record<string, string>
-): Record<string, string> {
-  const resolved: Record<string, string> = {};
-  const attrChecks: Record<string, string> = {};
-
-  for (const [key, value] of Object.entries(inlineMods)) {
-    if (inlineModifiers.includes(key)) {
-      resolved[key] = value;
-    } else {
-      attrChecks[key] = value;
-    }
-  }
-
-  // Convert classlist from "active:true,hidden:false" to JSON
-  if (resolved["classlist"]) {
-    const classMap: Record<string, boolean> = {};
-    for (const pair of resolved["classlist"].split(",")) {
-      const [cls, val] = pair.split(":");
-      classMap[cls.trim()] = val.trim() === "true";
-    }
-    resolved["classlist"] = JSON.stringify(classMap);
-  }
-
-  // Convert attribute checks to attrs-match JSON
-  if (Object.keys(attrChecks).length > 0) {
-    resolved["attrs-match"] = JSON.stringify(attrChecks);
-  }
-
-  return resolved;
-}
-
-/**
- * Parse the fs-assert-mutex attribute value into mutex mode and optional key list.
- * - "type" → same-type conditionals race (default, same as omitting the attribute)
- * - "each" → all conditionals race regardless of type
- * - "conditions" → condition keys compete, same-key co-members resolve independently
- * - "success,error" → selective: only listed keys compete
- * - empty/undefined → no mutex (defaults to "type" behavior)
- */
-function parseMutex(
-  value: string | undefined,
-  conditionKey: string | undefined
-): { mutex?: "type" | "each" | "conditions"; mutexKeys?: string[] } {
-  if (!conditionKey || value === undefined) return {};
-  if (value === "") {
-    console.warn('[Faultsense]: fs-assert-mutex requires a value ("type", "each", "conditions", or comma-separated condition keys).');
-    return {};
-  }
-  if (value === "type") return { mutex: "type" };
-  if (value === "each") return { mutex: "each" };
-  if (value === "conditions") return { mutex: "conditions" };
-  // Comma-separated list of condition keys
-  return {
-    mutex: "conditions",
-    mutexKeys: value.split(",").map(k => k.trim()),
-  };
-}
-
-/**
- * Parse dynamic assertion types from element attributes.
- * Matches: fs-assert-{knownType}-{conditionKey} (e.g., fs-assert-added-success)
- * Condition keys are freeform lowercase alphanumeric strings with hyphens.
- */
-function parseDynamicTypes(element: HTMLElement): AssertionTypeEntry[] {
-  const prefix = assertionPrefix.types;
-  const types: AssertionTypeEntry[] = [];
-
-  for (const attr of Array.from(element.attributes)) {
-    if (!attr.name.startsWith(prefix)) continue;
-    const suffix = attr.name.slice(prefix.length);
-
-    for (const domType of allAssertionTypes) {
-      if (suffix.startsWith(`${domType}-`)) {
-        const remaining = suffix.slice(domType.length + 1);
-
-        if (conditionKeySuffixPattern.test(remaining)) {
-          if (reservedConditionKeys.includes(remaining)) {
-            console.warn(
-              `[Faultsense]: Condition key "${remaining}" conflicts with a reserved name. Avoid using assertion type names as condition keys.`,
-              { element }
-            );
-          }
-          const { selector, modifiers } = parseTypeValue(attr.value);
-          types.push({
-            type: domType,
-            value: selector,
-            modifiers,
-            conditionKey: remaining,
-          });
-        }
-        break;
-      }
-    }
-  }
-
-  return types;
-}
-
-export function createElementProcessor(triggers: string[], eventMode: boolean = false, event?: Event): ElementProcessor {
+export function createElementProcessor(opts: ProcessOptions): ElementProcessor {
   return function (targets: HTMLElement[]): Assertion[] {
-    return processElements(targets, triggers, eventMode, event);
+    return processElements(targets, opts);
   };
 }
 
 export function processElements(
   targets: HTMLElement[],
-  triggers: string[],
-  eventMode: boolean = false,
-  event?: Event
+  opts: ProcessOptions
 ): Assertion[] {
+  const { triggers, eventMode = false, event, specRegistry, ignoreHtmlAttrs = false } = opts;
   const allAssertions: Assertion[] = [];
 
-  // Process each target container
   for (const target of targets) {
-    const elementsToProcess: HTMLElement[] = [];
+    // HTML attribute discovery — gated by ignoreHtmlAttrs.
+    if (!ignoreHtmlAttrs) {
+      const elementsToProcess: HTMLElement[] = [];
 
-    // Check if the target element itself is processable
-    if (isProcessableElement(target, triggers, event)) {
-      elementsToProcess.push(target);
-    } else if (!eventMode) {
-      // Only search descendants if NOT in event mode
-      // In event mode, we only process the exact clicked element
-      const elementsWithTriggers = target.querySelectorAll(`[${assertionTriggerAttr}]`);
+      if (isProcessableElement(target, triggers, event)) {
+        elementsToProcess.push(target);
+      } else if (!eventMode) {
+        // Only search descendants if NOT in event mode.
+        // In event mode, only process the exact clicked element.
+        const elementsWithTriggers = target.querySelectorAll(`[${assertionTriggerAttr}]`);
 
-      // Add all descendant elements with trigger attributes (filter them too)
-      for (const element of Array.from(elementsWithTriggers) as HTMLElement[]) {
-        if (isProcessableElement(element, triggers, event)) {
-          elementsToProcess.push(element);
+        for (const element of Array.from(elementsWithTriggers) as HTMLElement[]) {
+          if (isProcessableElement(element, triggers, event)) {
+            elementsToProcess.push(element);
+          }
         }
+      }
+
+      for (const element of elementsToProcess) {
+        const metadata = parseElementAssertions(element);
+        allAssertions.push(...createAssertions(element, metadata));
       }
     }
 
-    // Process each element that has assertion attributes
-    for (const element of elementsToProcess) {
-      const assertionMetadata = parseAssertions(element);
-      const newAssertions = createAssertions(element, assertionMetadata);
-      allAssertions.push(...newAssertions);
+    // JSON-spec discovery: scoped to the same target as the HTML side.
+    // Event mode resolves entries via target.matches; non-event mode runs
+    // the union-selector query against the target's subtree (inclusive).
+    if (specRegistry) {
+      const pairs = eventMode
+        ? specRegistry.findCandidatesForEvent(triggers, target, event)
+        : specRegistry.findCandidatesForScan(triggers, target);
+      for (const [element, metadata] of pairs) {
+        allAssertions.push(...createAssertions(element, metadata));
+      }
     }
   }
 
   return allAssertions;
-}
-
-/**
- * Quick way to determine if this is a faultsense processable element.
- * Parses the trigger value to extract the base trigger name and optional key filter.
- * For keydown triggers with filters (e.g., "keydown:Escape"), the event must match.
- * For custom event triggers (e.g., "event:cart-updated"), matches the full raw value
- * against the triggers array since each custom event name is unique.
- */
-function isProcessableElement(
-  element: HTMLElement,
-  triggers: string[],
-  event?: Event
-): boolean {
-  const raw = element.getAttribute(assertionTriggerAttr);
-  if (!raw) return false;
-  const { base, filter } = parseTrigger(raw);
-
-  // Custom event triggers: match full raw value (e.g., "event:cart-updated")
-  // since "event" base is shared by all custom events
-  if (base === "event") {
-    return triggers.includes(raw);
-  }
-
-  if (!triggers.includes(base)) return false;
-
-  // Key filter check: reject if the event doesn't match the specified key
-  if (filter && event instanceof KeyboardEvent) {
-    return matchesKeyFilter(event, parseKeyFilter(filter));
-  }
-
-  return true;
-}
-
-/**
- * Returns the assertion metadata from an element
- * Defers casting assertion values until they are used
- */
-function parseAssertions(element: HTMLElement): ElementAssertionMetadata {
-  let assertionMetaData: ElementAssertionMetadata = {
-    details: {},
-    types: [],
-    modifiers: {},
-  };
-
-  const processDetails = (keys: string[]): void => {
-    for (const key of keys) {
-      const value = element.getAttribute(`${assertionPrefix.details}${key}`);
-      if (value !== null) {
-        assertionMetaData.details[key] = value;
-      }
-    }
-  };
-
-  const processTypes = (keys: string[]): void => {
-    for (const key of keys) {
-      const value = element.getAttribute(`${assertionPrefix.types}${key}`);
-      if (value !== null) {
-        const parsed = parseTypeValue(value);
-        assertionMetaData.types.push({
-          type: key,
-          value: parsed.selector,
-          modifiers: Object.keys(parsed.modifiers).length > 0 ? parsed.modifiers : undefined,
-        });
-      }
-    }
-  };
-
-  const processModifiers = (keys: string[]): void => {
-    for (const key of keys) {
-      const value = element.getAttribute(`${assertionPrefix.modifiers}${key}`);
-      if (value !== null) {
-        assertionMetaData.modifiers[key] = value;
-      }
-    }
-  };
-
-  processDetails(supportedAssertions.details);
-  processTypes(supportedAssertions.types);
-  processModifiers(supportedAssertions.modifiers);
-
-  assertionMetaData.types.push(...parseDynamicTypes(element));
-
-  return assertionMetaData;
 }
 
 function isValidAssertionMetadata(
@@ -362,7 +122,7 @@ function isValidAssertionMetadata(
   return true;
 }
 
-function createAssertions(
+export function createAssertions(
   element: HTMLElement,
   metadata: ElementAssertionMetadata
 ): Assertion[] {
@@ -370,16 +130,26 @@ function createAssertions(
     return [];
   }
 
+  for (const typeEntry of metadata.types) {
+    if (
+      typeEntry.conditionKey &&
+      reservedConditionKeys.includes(typeEntry.conditionKey)
+    ) {
+      console.warn(
+        `[Faultsense]: Condition key "${typeEntry.conditionKey}" conflicts with a reserved name. Avoid using assertion type names as condition keys.`,
+        { element }
+      );
+    }
+  }
+
   return metadata.types.filter((typeEntry) => {
     if (typeEntry.type === "route") {
-      // Route assertions require a pattern
       if (!typeEntry.value) {
         console.warn(
           `[Faultsense]: Route assertion on "${metadata.details["assert"]}" has no pattern. Skipping.`
         );
         return false;
       }
-      // Validate all regex parts of the route pattern at parse time
       const parsed = parseRoutePattern(typeEntry.value);
       const invalid = validateRoutePattern(parsed);
       if (invalid) {
@@ -390,7 +160,7 @@ function createAssertions(
       }
     }
     return true;
-  }).map((typeEntry) => {
+  }).map((typeEntry: AssertionTypeEntry) => {
     // Route assertions have no inline modifiers — everything is in the URL pattern.
     // DOM assertions use resolveInlineModifiers to handle text-matches, classlist, attrs-match.
     const resolvedMods = typeEntry.modifiers
@@ -399,8 +169,6 @@ function createAssertions(
     const mergedModifiers = { ...metadata.modifiers, ...resolvedMods };
 
     // Warn about unsupported modifiers for this assertion type.
-    // typeEntry.type is widened to string here because typeEntry comes from
-    // parser output — cast to the record's key type so the lookup typechecks.
     const allowedMods = supportedModifiersByType[typeEntry.type as keyof typeof supportedModifiersByType];
     if (allowedMods) {
       for (const mod of Object.keys(resolvedMods)) {
